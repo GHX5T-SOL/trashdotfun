@@ -1,13 +1,10 @@
 'use client';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { PublicKey, Transaction, SystemProgram, Keypair, LAMPORTS_PER_SOL, SendTransactionError } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, mintTo, getAssociatedTokenAddress } from '@solana/spl-token';
-
-const _LAMPORTS_PER_SOL = ...; // Example
+import { Transaction, SystemProgram, Keypair } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createMintToInstruction } from '@solana/spl-token';
 
 export default function CreateToken() {
   const [name, setName] = useState('');
@@ -28,7 +25,7 @@ export default function CreateToken() {
     try {
       setStatus('Creating token...');
       const decimals = 9;
-      const totalSupply = BigInt(parseInt(supply) * Math.pow(10, decimals));
+      const totalSupply = BigInt(Number(supply) * Math.pow(10, decimals));
 
       // Get recent blockhash
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
@@ -70,7 +67,7 @@ export default function CreateToken() {
         blockhash,
         lastValidBlockHeight,
       });
-      setStatus('Mint account created successfully!');
+      setStatus('Mint account created successfully! Proceeding to create associated token account...');
 
       // Step 2: Create associated token account and mint tokens
       const newBlockhash = await connection.getLatestBlockhash();
@@ -83,27 +80,24 @@ export default function CreateToken() {
         mintPublicKey,
         publicKey,
         false,
-        new PublicKey('BiX9RsKCEUe7oHX9Rnwj3VmJ2fzTKwXizgaxEwUCSsHh')
+        TOKEN_PROGRAM_ID
       );
       const createATAInstruction = createAssociatedTokenAccountInstruction(
         publicKey, // Payer
         associatedTokenAccount,
         publicKey, // Owner
         mintPublicKey,
-        new PublicKey('BiX9RsKCEUe7oHX9Rnwj3VmJ2fzTKwXizgaxEwUCSsHh')
+        TOKEN_PROGRAM_ID
       );
       newTx.add(createATAInstruction);
 
-      const mintToInstruction = await mintTo(
-        connection,
-        publicKey, // Payer/authority
+      const mintToInstruction = createMintToInstruction(
         mintPublicKey,
         associatedTokenAccount,
-        publicKey, // Authority
+        publicKey, // Mint authority
         totalSupply,
         [], // No additional signers
-        { commitment: 'finalized' },
-        new PublicKey('BiX9RsKCEUe7oHX9Rnwj3VmJ2fzTKwXizgaxEwUCSsHh')
+        TOKEN_PROGRAM_ID
       );
       newTx.add(mintToInstruction);
 
@@ -111,14 +105,13 @@ export default function CreateToken() {
       let mintToSignature;
       try {
         mintToSignature = await sendTransaction(newTx, connection);
-      } catch (error) {
-        if (error instanceof SendTransactionError) {
-          const logs = await connection.getTransaction(mintToSignature, 'json');
-          console.error('Transaction logs:', logs);
-          setStatus(`Transaction failed. Logs: ${JSON.stringify(logs)}. Check console for details.`);
-        } else {
-          throw error;
+        if (!mintToSignature) {
+          setStatus('Minting transaction failed. No signature returned.');
+          return;
         }
+      } catch (error) {
+        setStatus(`Transaction failed: ${(error as Error).message}`);
+        return;
       }
       await connection.confirmTransaction({
         signature: mintToSignature,
