@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, Keypair, SendTransactionError } from '@solana/web3.js';
+import { PublicKey, Transaction, SystemProgram, Keypair, LAMPORTS_PER_SOL, SendTransactionError } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, mintTo, getAssociatedTokenAddress } from '@solana/spl-token';
 
 export default function CreateToken() {
@@ -27,20 +27,19 @@ export default function CreateToken() {
       const decimals = 9;
       const totalSupply = BigInt(parseInt(supply) * Math.pow(10, decimals));
 
-      // Generate a unique keypair for the mint account
-      const mintKeypair = Keypair.generate();
-      const mintPublicKey = mintKeypair.publicKey;
-
       // Get recent blockhash
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-      // Step 1: Create and initialize mint account
+      // Step 1: Generate a new keypair for the mint account
+      const mintKeypair = Keypair.generate();
+      const mintPublicKey = mintKeypair.publicKey;
       const mintRent = await connection.getMinimumBalanceForRentExemption(82); // Size for mint account
       const mintTx = new Transaction({
         recentBlockhash: blockhash,
         feePayer: publicKey,
       });
 
+      // Add instruction to create and initialize mint account
       mintTx.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -58,7 +57,7 @@ export default function CreateToken() {
         )
       );
 
-      // Include mintKeypair as a signer (though wallet will sign in practice)
+      // Include the mint keypair as a signer (wallet will sign it)
       mintTx.partialSign(mintKeypair);
 
       setStatus('Sending mint creation transaction...');
@@ -113,7 +112,7 @@ export default function CreateToken() {
         if (error instanceof SendTransactionError) {
           const logs = await connection.getTransaction(mintToSignature, 'json');
           console.error('Transaction logs:', logs);
-          setStatus(`Transaction failed. Logs: ${JSON.stringify(logs?.logs || 'No logs available')}. Check console for details.`);
+          setStatus(`Transaction failed. Logs: ${JSON.stringify(logs)}. Check console for details.`);
         } else {
           throw error;
         }
