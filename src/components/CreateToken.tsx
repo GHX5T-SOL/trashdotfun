@@ -7,6 +7,8 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { PublicKey, Transaction, SystemProgram, Keypair, LAMPORTS_PER_SOL, SendTransactionError } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, createInitializeMintInstruction, createAssociatedTokenAccountInstruction, mintTo, getAssociatedTokenAddress } from '@solana/spl-token';
 
+const _LAMPORTS_PER_SOL = ...; // Example
+
 export default function CreateToken() {
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
