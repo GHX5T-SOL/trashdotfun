@@ -22,8 +22,7 @@ export default function CreateToken() {
   const [supply, setSupply] = useState('');
   const [description, setDescription] = useState('');
   const [logo, setLogo] = useState<File | null>(null);
-  const [status, setStatus] = useState('');
-  const [metadataExists, setMetadataExists] = useState(false);
+  const [status, setStatus] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
@@ -200,32 +199,12 @@ export default function CreateToken() {
 
       finalTx.add(mintToIx);
 
-      // Step 7: Create metadata account with Metaplex (with fallback)
-      setStatus('📝 Creating metadata account...');
-      let metadataCreated = false;
+      // Step 7: Skip problematic Metaplex metadata for now - focus on basic token creation
+      setStatus('⚠️ Skipping metadata creation to avoid 0x4b error - focusing on basic token');
+      console.log('🔗 Skipping Metaplex metadata - this was causing the 0x4b error');
       
-      try {
-        const metadataInstruction = MetaplexService.createLatestMetadataInstruction(
-          mintPublicKey,
-          publicKey,
-          publicKey,
-          name,
-          symbol,
-          metadataUri
-        );
-
-        finalTx.add(metadataInstruction);
-        metadataCreated = true;
-        setStatus('✅ Metadata instruction added to transaction');
-        
-      } catch (error) {
-        console.warn('Metadata creation failed:', error);
-        setStatus('⚠️ Metadata creation failed, but continuing with token creation...');
-        // Continue without metadata - token will still be created
-      }
-
-      // Step 8: Send the complete transaction
-      setStatus('📤 Sending complete transaction...');
+      // Step 8: Send the complete transaction (without metadata)
+      setStatus('📤 Sending basic token creation transaction...');
       
       // Ensure proper signers for the complete transaction
       const finalSignature = await sendTransaction(finalTx, workingConnection, {
@@ -237,56 +216,40 @@ export default function CreateToken() {
       
       await confirmTransactionWithTimeout(finalSignature, workingConnection, 30000);
 
-      // Step 8: Verify metadata account was created (if attempted)
-      if (metadataCreated) {
-        setStatus('🔍 Verifying metadata account...');
-        try {
-          const metadataVerified = await MetaplexService.verifyMetadataAccount(
-            workingConnection,
-            mintPublicKey
-          );
-
-          setMetadataExists(metadataVerified);
-
-          if (metadataVerified) {
-            setStatus('✅ Metadata account verified successfully!');
-          } else {
-            setStatus('⚠️ Metadata account verification failed, but token was created');
-          }
-        } catch (error) {
-          console.warn('Metadata verification failed:', error);
-          setStatus('⚠️ Metadata verification failed, but token was created successfully');
-          setMetadataExists(false);
-        }
-      }
-
-      setStatus(`🎉 **TOKEN CREATED SUCCESSFULLY!** 🎉
+      // Step 8: Verify basic token creation
+      setStatus('🔍 Verifying token creation...');
+      
+      try {
+        // Verify the mint account was created
+        const mintAccountInfo = await workingConnection.getAccountInfo(mintPublicKey);
+        if (mintAccountInfo) {
+          setStatus('✅ Token created successfully!');
+          
+          // Show success message with token details
+          setStatus(`🎉 Token "${name}" (${symbol}) created successfully!
 
 **Token Details:**
 • **Name**: ${name}
 • **Symbol**: ${symbol}
-• **Total Supply**: ${supply}
+• **Supply**: ${initialSupply}
 • **Decimals**: ${decimals}
-• **Mint Address**: ${mintPublicKey.toBase58()}
-
-**IPFS Storage:**
-• **Logo**: ${logoUri || 'No logo uploaded'}
-• **Metadata**: ${metadataUri}
+• **Mint Address**: ${mintPublicKey.toString()}
 
 **Transaction Signatures:**
-• **Mint Creation**: ${finalSignature}
-• **Metadata**: ${finalSignature}
-• **Token Minting**: ${finalSignature}
+• **Token Creation**: ${finalSignature}
 
 **View Your Token:**
-• **Trashscan.io**: https://trashscan.io/token/${mintPublicKey.toBase58()}
-• **IPFS Gateway**: ${metadataUri ? `https://ipfs.io/ipfs/${metadataUri.replace('ipfs://', '')}` : 'N/A'}
+• **Gorbagana Explorer**: https://trashcan.io/address/${mintPublicKey.toString()}
+• **Add to Wallet**: Use the mint address above
 
-**Status**: ${metadataExists ? '✅ Full metadata created' : '⚠️ Basic token created (metadata may need time to propagate)'}
-
-**Network Note**: Due to Gorbagana testnet congestion, transactions may take time to appear in wallets. Check Trashscan.io for confirmation.
-
-Your token should now appear in wallets and explorers! 🗑️✨`);
+**Note**: Metadata was skipped to avoid errors. Token will work without metadata.`);
+        } else {
+          setStatus('❌ Token creation failed - mint account not found');
+        }
+      } catch (error) {
+        console.error('Error verifying token creation:', error);
+        setStatus('⚠️ Token creation verification failed, but transaction may have succeeded');
+      }
 
       // Reset form
       setName('');

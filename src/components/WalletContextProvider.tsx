@@ -7,14 +7,11 @@ import { useMemo } from 'react';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export default function WalletContextProvider({ children }: { children: React.ReactNode }) {
-  // Use our backend proxy endpoint to avoid CORS issues
-  // This routes: Frontend -> Our Backend -> Gorbagana RPC (as recommended by devs)
-  const endpoint = typeof window !== 'undefined' 
-    ? `${window.location.origin}/api/rpc`
-    : 'http://localhost:3000/api/rpc';
+  // Use direct connection to Gorbagana RPC - this was working before
+  const endpoint = 'https://rpc.gorbagana.wtf/';
   
-  console.log('🔗 WalletContextProvider - Using Backend Proxy Endpoint:', endpoint);
-  console.log('🔗 This will route through: Frontend -> Backend -> Gorbagana RPC (as recommended by devs)');
+  console.log('🔗 WalletContextProvider - Using Direct Gorbagana RPC:', endpoint);
+  console.log('🔗 Direct connection - this was working before we added complexity');
   
   const wallets = useMemo(
     () => [
