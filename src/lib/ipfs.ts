@@ -5,6 +5,13 @@ export class IPFSService {
   constructor() {
     // Get Web3.Storage token from environment
     this.web3StorageToken = process.env.NEXT_PUBLIC_WEB3_STORAGE_TOKEN || null;
+    
+    // Log token status for debugging
+    if (this.web3StorageToken) {
+      console.log('IPFS Service: Web3.Storage token configured');
+    } else {
+      console.log('IPFS Service: No Web3.Storage token, using mock service');
+    }
   }
   
   /**
@@ -32,7 +39,16 @@ export class IPFSService {
       });
       
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Web3.Storage upload failed:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Web3.Storage authentication failed - check your token');
+        } else if (response.status === 410) {
+          throw new Error('Web3.Storage service unavailable - token may be expired or invalid');
+        } else {
+          throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        }
       }
       
       const result = await response.json();
@@ -85,7 +101,16 @@ export class IPFSService {
       });
       
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Web3.Storage metadata upload failed:', response.status, errorText);
+        
+        if (response.status === 401) {
+          throw new Error('Web3.Storage authentication failed - check your token');
+        } else if (response.status === 410) {
+          throw new Error('Web3.Storage service unavailable - token may be expired or invalid');
+        } else {
+          throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        }
       }
       
       const result = await response.json();
@@ -99,7 +124,7 @@ export class IPFSService {
       
       // Fallback to mock service if Web3.Storage fails
       console.warn('Falling back to mock IPFS service for metadata');
-      return this.mockMetadataUpload(metadata);
+      return this.mockMetadataUpload();
     }
   }
   
@@ -158,5 +183,24 @@ export class IPFSService {
    */
   isRealIPFSAvailable(): boolean {
     return this.web3StorageToken !== null;
+  }
+  
+  /**
+   * Get token status for debugging
+   */
+  getTokenStatus(): string {
+    if (!this.web3StorageToken) {
+      return 'No token configured';
+    }
+    
+    if (this.web3StorageToken.startsWith('did:key:')) {
+      return 'Token appears to be DID format - Web3.Storage expects JWT format';
+    }
+    
+    if (this.web3StorageToken.startsWith('eyJ')) {
+      return 'Token appears to be JWT format - should work with Web3.Storage';
+    }
+    
+    return 'Token format unknown - may not work with Web3.Storage';
   }
 }

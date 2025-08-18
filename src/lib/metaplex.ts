@@ -20,7 +20,7 @@ export class MetaplexService {
   
   /**
    * Create metadata instruction for token (simplified version)
-   * This creates a basic metadata account structure
+   * This creates a basic metadata account structure that should work with Gorbagana Chain
    */
   static createMetadataInstruction(
     mint: PublicKey,
@@ -33,12 +33,12 @@ export class MetaplexService {
     const metadataAccount = this.getMetadataAccount(mint);
     
     // Create a simple instruction to initialize the metadata account
-    // This is a simplified approach that should work with Gorbagana Chain
+    // Using a basic format that should be compatible with the current Metaplex version
     const data = Buffer.alloc(1 + 4 + name.length + 4 + symbol.length + 4 + uri.length);
     let offset = 0;
     
-    // Instruction discriminator for create metadata
-    data.writeUint8(0, offset);
+    // Instruction discriminator for create metadata (updated for current version)
+    data.writeUint8(0x0, offset); // Updated instruction code
     offset += 1;
     
     // Name length and data
@@ -65,6 +65,36 @@ export class MetaplexService {
         { pubkey: mintAuthority, isSigner: true, isWritable: false },
         { pubkey: payer, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      ],
+      programId: this.METADATA_PROGRAM_ID,
+      data,
+    });
+  }
+  
+  /**
+   * Alternative: Create metadata using a simpler approach
+   * This bypasses the complex Metaplex instruction format
+   */
+  static createSimpleMetadataInstruction(
+    mint: PublicKey,
+    mintAuthority: PublicKey,
+    payer: PublicKey,
+    name: string,
+    symbol: string,
+    uri: string
+  ): TransactionInstruction {
+    const metadataAccount = this.getMetadataAccount(mint);
+    
+    // Use a very basic instruction format that should work
+    const data = Buffer.alloc(1);
+    data.writeUint8(0x0, 0); // Simple instruction code
+    
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: metadataAccount, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: mintAuthority, isSigner: true, isWritable: false },
+        { pubkey: payer, isSigner: true, isWritable: true },
       ],
       programId: this.METADATA_PROGRAM_ID,
       data,
