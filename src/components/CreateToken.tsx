@@ -252,7 +252,7 @@ export default function CreateToken() {
         let metadataCreated = false;
         if (metadataUri) {
           try {
-            metadataCreated = await MetaplexService.metadataExists(workingConnection, mintPublicKey);
+            metadataCreated = await MetaplexService.metadataAccountExists(workingConnection, mintPublicKey);
             console.log('Metadata account exists:', metadataCreated);
           } catch (error) {
             console.error('Error checking metadata:', error);
