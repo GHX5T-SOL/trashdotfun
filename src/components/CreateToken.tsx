@@ -27,6 +27,13 @@ export default function CreateToken() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
 
+  // Debug logging to check connection endpoint
+  if (typeof window !== 'undefined') {
+    console.log('🔗 CreateToken - Connection endpoint:', connection.rpcEndpoint);
+    console.log('🔗 CreateToken - Expected proxy endpoint:', `${window.location.origin}/api/rpc`);
+    console.log('🔗 CreateToken - Using proxy:', connection.rpcEndpoint.includes('/api/rpc'));
+  }
+
   // Custom confirmation function with timeout
   const confirmTransactionWithTimeout = async (
     signature: string, 
