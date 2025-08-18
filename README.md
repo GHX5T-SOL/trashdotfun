@@ -57,19 +57,19 @@ The app features a unique Oscar the Grouch trash/garbage aesthetic:
 
 ---
 
-## 🛠️ **Installation & Setup**
+## 🚀 Quick Start
 
-### **Prerequisites**
+### Prerequisites
 - Node.js 18+ 
-- Yarn package manager
-- A Solana wallet (Phantom, Backpack, etc.)
-- Some $GOR tokens for transaction fees
+- Yarn or npm
+- Solana wallet (Phantom, Solflare, etc.)
+- **IPFS Storage**: Get free decentralized storage at [Storacha Network](https://console.storacha.network/) (formerly Web3.Storage)
 
-### **Local Development**
+### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/GHX5T-SOL/trashdotfun.git
+   git clone https://github.com/yourusername/trashdotfun.git
    cd trashdotfun
    ```
 
@@ -78,17 +78,21 @@ The app features a unique Oscar the Grouch trash/garbage aesthetic:
    yarn install
    ```
 
-3. **Set up environment variables**
+3. **Configure environment variables**
    ```bash
    cp .env.local.example .env.local
    ```
    
-   Edit `.env.local` with your configuration:
-   ```env
+   Update `.env.local` with your configuration:
+   ```bash
+   # Gorbagana Chain RPC
    NEXT_PUBLIC_GOR_RPC_URL=https://rpc.gorbagana.wtf/
-   NEXT_PUBLIC_TOKEN_PROGRAM_ID=TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
-   NEXT_PUBLIC_ASSOCIATED_TOKEN_PROGRAM_ID=ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL
+   
+   # IPFS Storage (Storacha Network)
+   NEXT_PUBLIC_WEB3_STORAGE_TOKEN=your_did_key_here
    ```
+   
+   **Note**: Storacha Network uses UCANs (User Controlled Authorization Networks) with DID keys instead of JWT tokens. Get your free DID key at [console.storacha.network](https://console.storacha.network/).
 
 4. **Run the development server**
    ```bash

@@ -463,14 +463,27 @@ Please try again or contact support if the issue persists.`);
           </p>
           {(() => {
             const ipfsService = new IPFSService();
-            if (!ipfsService.isRealIPFSAvailable()) {
+            if (ipfsService.isRealIPFSAvailable()) {
+              return (
+                <div className="mt-2">
+                  <p className="text-xs text-orange-400 mb-1">
+                    ⚠️ Real IPFS requires UCAN setup
+                  </p>
+                  <p className="text-xs text-blue-400">
+                    💡 <a href="https://docs.storacha.network" target="_blank" rel="noopener noreferrer" className="underline">Setup UCANs with Storacha Network</a>
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Currently using mock service for development
+                  </p>
+                </div>
+              );
+            } else {
               return (
                 <p className="text-xs text-orange-400 mt-1">
-                  💡 Get free IPFS storage at <a href="https://web3.storage" target="_blank" rel="noopener noreferrer" className="underline">web3.storage</a>
+                  💡 Get free IPFS storage at <a href="https://console.storacha.network" target="_blank" rel="noopener noreferrer" className="underline">Storacha Network</a>
                 </p>
               );
             }
-            return null;
           })()}
         </div>
       </div>

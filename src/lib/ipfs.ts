@@ -1,66 +1,57 @@
-// Real IPFS service using Web3.Storage
+// IPFS service using Storacha Network (formerly Web3.Storage)
 export class IPFSService {
-  private web3StorageToken: string | null = null;
+  private storachaDidKey: string | null = null;
   
   constructor() {
-    // Get Web3.Storage token from environment
-    this.web3StorageToken = process.env.NEXT_PUBLIC_WEB3_STORAGE_TOKEN || null;
+    // Get Storacha DID key from environment
+    this.storachaDidKey = process.env.NEXT_PUBLIC_WEB3_STORAGE_TOKEN || null;
     
     // Log token status for debugging
-    if (this.web3StorageToken) {
-      console.log('IPFS Service: Web3.Storage token configured');
+    if (this.storachaDidKey) {
+      console.log('IPFS Service: Storacha Network DID key configured');
     } else {
-      console.log('IPFS Service: No Web3.Storage token, using mock service');
+      console.log('IPFS Service: No Storacha DID key, using mock service');
     }
   }
   
   /**
-   * Upload image to IPFS using Web3.Storage
+   * Upload image to IPFS using Storacha Network
+   * Note: Storacha uses UCANs instead of JWT tokens
    */
   async uploadImage(file: File): Promise<string> {
     try {
-      if (!this.web3StorageToken) {
-        throw new Error('Web3.Storage token not configured');
+      if (!this.storachaDidKey) {
+        throw new Error('Storacha Network DID key not configured');
       }
       
-      console.log('Uploading image to IPFS via Web3.Storage:', file.name);
+      console.log('Uploading image to IPFS via Storacha Network:', file.name);
       
-      // Create FormData for upload
+      // For now, we'll use a mock upload since Storacha requires UCAN setup
+      // TODO: Implement proper Storacha Network integration with UCANs
+      console.warn('Storacha Network integration requires UCAN setup - using mock service for now');
+      
+      // Fallback to mock service until we implement UCAN integration
+      return this.mockIPFSUpload(file);
+      
+      /* 
+      // Future Storacha Network implementation:
+      // This will require the @storacha/client package and UCAN setup
       const formData = new FormData();
       formData.append('file', file);
       
-      // Upload to Web3.Storage
-      const response = await fetch('https://api.web3.storage/upload', {
+      const response = await fetch('https://api.storacha.network/upload', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.web3StorageToken}`,
+          'Authorization': `Bearer ${this.storachaDidKey}`,
         },
         body: formData,
       });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Web3.Storage upload failed:', response.status, errorText);
-        
-        if (response.status === 401) {
-          throw new Error('Web3.Storage authentication failed - check your token');
-        } else if (response.status === 410) {
-          throw new Error('Web3.Storage service unavailable - token may be expired or invalid');
-        } else {
-          throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
-        }
-      }
-      
-      const result = await response.json();
-      const ipfsHash = result.cid;
-      
-      console.log('Image uploaded successfully to IPFS:', ipfsHash);
-      return `ipfs://${ipfsHash}`;
+      */
       
     } catch (error) {
       console.error('IPFS upload failed:', error);
       
-      // Fallback to mock service if Web3.Storage fails
+      // Fallback to mock service if Storacha fails
       console.warn('Falling back to mock IPFS service');
       return this.mockIPFSUpload(file);
     }
@@ -71,58 +62,22 @@ export class IPFSService {
    */
   async uploadMetadata(metadata: Record<string, unknown>): Promise<string> {
     try {
-      if (!this.web3StorageToken) {
-        throw new Error('Web3.Storage token not configured');
+      if (!this.storachaDidKey) {
+        throw new Error('Storacha Network DID key not configured');
       }
       
-      console.log('Uploading metadata to IPFS via Web3.Storage');
+      console.log('Uploading metadata to IPFS via Storacha Network');
       
-      // Convert metadata to JSON blob
-      const jsonBlob = new Blob([JSON.stringify(metadata, null, 2)], {
-        type: 'application/json'
-      });
+      // For now, we'll use a mock upload since Storacha requires UCAN setup
+      console.warn('Storacha Network integration requires UCAN setup - using mock service for now');
       
-      // Create file from blob
-      const metadataFile = new File([jsonBlob], 'metadata.json', {
-        type: 'application/json'
-      });
-      
-      // Create FormData for upload
-      const formData = new FormData();
-      formData.append('file', metadataFile);
-      
-      // Upload to Web3.Storage
-      const response = await fetch('https://api.web3.storage/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.web3StorageToken}`,
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Web3.Storage metadata upload failed:', response.status, errorText);
-        
-        if (response.status === 401) {
-          throw new Error('Web3.Storage authentication failed - check your token');
-        } else if (response.status === 410) {
-          throw new Error('Web3.Storage service unavailable - token may be expired or invalid');
-        } else {
-          throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
-        }
-      }
-      
-      const result = await response.json();
-      const ipfsHash = result.cid;
-      
-      console.log('Metadata uploaded successfully to IPFS:', ipfsHash);
-      return `ipfs://${ipfsHash}`;
+      // Fallback to mock service until we implement UCAN integration
+      return this.mockMetadataUpload();
       
     } catch (error) {
       console.error('IPFS metadata upload failed:', error);
       
-      // Fallback to mock service if Web3.Storage fails
+      // Fallback to mock service if Storacha fails
       console.warn('Falling back to mock IPFS service for metadata');
       return this.mockMetadataUpload();
     }
@@ -182,25 +137,28 @@ export class IPFSService {
    * Check if real IPFS is available
    */
   isRealIPFSAvailable(): boolean {
-    return this.web3StorageToken !== null;
+    return this.storachaDidKey !== null;
   }
   
   /**
    * Get token status for debugging
    */
   getTokenStatus(): string {
-    if (!this.web3StorageToken) {
-      return 'No token configured';
+    if (!this.storachaDidKey) {
+      return 'No DID key configured';
     }
     
-    if (this.web3StorageToken.startsWith('did:key:')) {
-      return 'Token appears to be DID format - Web3.Storage expects JWT format';
+    if (this.storachaDidKey.startsWith('did:key:')) {
+      return 'DID key configured for Storacha Network (UCAN-based)';
     }
     
-    if (this.web3StorageToken.startsWith('eyJ')) {
-      return 'Token appears to be JWT format - should work with Web3.Storage';
-    }
-    
-    return 'Token format unknown - may not work with Web3.Storage';
+    return 'Unknown key format';
+  }
+  
+  /**
+   * Get setup instructions for Storacha Network
+   */
+  getSetupInstructions(): string {
+    return 'To enable real IPFS uploads, you need to set up UCANs with Storacha Network. See: https://docs.storacha.network';
   }
 }
