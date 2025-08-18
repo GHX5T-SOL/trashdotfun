@@ -44,6 +44,19 @@ export default function CreateToken() {
     return connection;
   }, [connection]);
 
+  // Fallback connection strategy: try proxy first, then fallback to original
+  const getWorkingConnection = async () => {
+    try {
+      // Test if proxy connection is working
+      await proxyConnection.getLatestBlockhash('processed');
+      console.log('🔗 Using proxy connection successfully');
+      return proxyConnection;
+    } catch (error) {
+      console.warn('🔗 Proxy connection failed, falling back to original connection:', error);
+      return connection;
+    }
+  };
+
   // Custom confirmation function with timeout
   const confirmTransactionWithTimeout = async (
     signature: string, 
@@ -136,11 +149,14 @@ export default function CreateToken() {
       const mintKeypair = Keypair.generate();
       const mintPublicKey = mintKeypair.publicKey;
       
+      // Get the best working connection
+      const workingConnection = await getWorkingConnection();
+      
       const createMintAccountIx = SystemProgram.createAccount({
         fromPubkey: publicKey,
         newAccountPubkey: mintPublicKey,
         space: MINT_SIZE,
-        lamports: await proxyConnection.getMinimumBalanceForRentExemption(MINT_SIZE),
+        lamports: await workingConnection.getMinimumBalanceForRentExemption(MINT_SIZE),
         programId: TOKEN_PROGRAM_ID,
       });
 
@@ -204,7 +220,7 @@ export default function CreateToken() {
       let blockhash = '';
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
-          const { blockhash: recentBlockhash } = await proxyConnection.getLatestBlockhash('processed');
+          const { blockhash: recentBlockhash } = await workingConnection.getLatestBlockhash('processed');
           blockhash = recentBlockhash;
           break;
         } catch (error) {
@@ -219,8 +235,15 @@ export default function CreateToken() {
 
       // Use aggressive confirmation with shorter timeout
       setStatus('⏳ Waiting for mint confirmation (30s timeout)...');
-      const mintSignature = await sendTransaction(transaction, proxyConnection);
-      await confirmTransactionWithTimeout(mintSignature, proxyConnection, 30000);
+      
+      // Force transaction to be processed on-chain by skipping preflight
+      const mintSignature = await sendTransaction(transaction, workingConnection, {
+        skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
+        maxRetries: 3,
+        preflightCommitment: 'processed'
+      });
+      
+      await confirmTransactionWithTimeout(mintSignature, workingConnection, 30000);
 
       setStatus('✅ Mint account created successfully! Creating metadata...');
 
@@ -230,7 +253,7 @@ export default function CreateToken() {
       let metadataSignature = '';
       
       try {
-        const newBlockhashResponse = await proxyConnection.getLatestBlockhash('processed');
+        const newBlockhashResponse = await workingConnection.getLatestBlockhash('processed');
         const newBlockhash = newBlockhashResponse.blockhash;
         
         const metadataInstruction = MetaplexService.createLatestMetadataInstruction(
@@ -254,8 +277,15 @@ export default function CreateToken() {
         );
 
         setStatus('📤 Sending metadata transaction...');
-        metadataSignature = await sendTransaction(metadataTx, proxyConnection);
-        await confirmTransactionWithTimeout(metadataSignature, proxyConnection, 30000);
+        
+        // Force transaction to be processed on-chain by skipping preflight
+        metadataSignature = await sendTransaction(metadataTx, workingConnection, {
+          skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
+          maxRetries: 3,
+          preflightCommitment: 'processed'
+        });
+        
+        await confirmTransactionWithTimeout(metadataSignature, workingConnection, 30000);
         
         metadataCreated = true;
         setStatus('✅ Metadata created successfully!');
@@ -267,7 +297,7 @@ export default function CreateToken() {
       }
 
       setStatus('🏦 Creating associated token account...');
-      const finalBlockhashResponse = await proxyConnection.getLatestBlockhash('processed');
+      const finalBlockhashResponse = await workingConnection.getLatestBlockhash('processed');
       const finalBlockhash = finalBlockhashResponse.blockhash;
 
       const finalTx = new Transaction({
@@ -283,15 +313,22 @@ export default function CreateToken() {
       );
 
       setStatus('📤 Sending final transaction...');
-      const mintToSignature = await sendTransaction(finalTx, proxyConnection);
-      await confirmTransactionWithTimeout(mintToSignature, proxyConnection, 30000);
+      
+      // Force transaction to be processed on-chain by skipping preflight
+      const mintToSignature = await sendTransaction(finalTx, workingConnection, {
+        skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
+        maxRetries: 3,
+        preflightCommitment: 'processed'
+      });
+      
+      await confirmTransactionWithTimeout(mintToSignature, workingConnection, 30000);
 
       // Step 8: Verify metadata account was created (if attempted)
       if (metadataCreated) {
         setStatus('🔍 Verifying metadata account...');
         try {
           const metadataVerified = await MetaplexService.verifyMetadataAccount(
-            proxyConnection,
+            workingConnection,
             mintPublicKey
           );
 
