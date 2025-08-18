@@ -7,7 +7,9 @@ import { useMemo } from 'react';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export default function WalletContextProvider({ children }: { children: React.ReactNode }) {
-  const endpoint = process.env.NEXT_PUBLIC_GOR_RPC_URL || 'https://gorchain.wstf.io';
+  // Use the official Gorbagana RPC endpoint
+  const endpoint = process.env.NEXT_PUBLIC_GOR_RPC_URL || 'https://rpc.gorbagana.wtf/';
+  
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
