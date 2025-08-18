@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { 
@@ -33,6 +33,20 @@ export default function CreateToken() {
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Use proxy connection to avoid CORS issues (as recommended by Gorbagana devs)
+  const proxyConnection = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      console.log('🔗 CreateToken - Using proxy connection to avoid CORS');
+      return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
+    }
+    return connection;
+  }, [connection]);
+
+  // Use proxy connection for all operations
+  const workingConnection = useMemo(() => {
+    return proxyConnection;
+  }, [proxyConnection]);
+
   // Custom transaction confirmation with timeout
   const confirmTransactionWithTimeout = async (
     connection: Connection,
@@ -57,7 +71,7 @@ export default function CreateToken() {
   };
 
   const handleCreateToken = useCallback(async () => {
-    if (!publicKey || !connection) {
+    if (!publicKey || !workingConnection) {
       setStatus('Please connect your wallet first.');
       return;
     }
@@ -75,8 +89,9 @@ export default function CreateToken() {
       const mintKeypair = Keypair.generate();
       const mintPublicKey = mintKeypair.publicKey;
 
-      // Get the minimum rent for exemption
-      const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+      // Get the minimum rent for exemption using proxy connection
+      setStatus('Getting mint account requirements...');
+      const mintRent = await workingConnection.getMinimumBalanceForRentExemption(MINT_SIZE);
 
       // Create mint account instruction
       const createMintAccountIx = SystemProgram.createAccount({
@@ -213,14 +228,15 @@ export default function CreateToken() {
         finalTx.add(metadataIx);
       }
 
-      // Get recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash('finalized');
+      // Get recent blockhash using proxy connection
+      setStatus('Getting recent blockhash...');
+      const { blockhash } = await workingConnection.getLatestBlockhash('finalized');
       finalTx.recentBlockhash = blockhash;
       finalTx.feePayer = publicKey;
 
       // Sign and send transaction
       setStatus('Signing and sending transaction...');
-      const finalSignature = await sendTransaction(finalTx, connection, {
+      const finalSignature = await sendTransaction(finalTx, workingConnection, {
         signers: [mintKeypair],
         skipPreflight: false,
         preflightCommitment: 'confirmed',
@@ -229,14 +245,14 @@ export default function CreateToken() {
 
       // Wait for confirmation
       setStatus('Waiting for transaction confirmation...');
-      const confirmation = await confirmTransactionWithTimeout(connection, finalSignature, 60000);
+      const confirmation = await confirmTransactionWithTimeout(workingConnection, finalSignature, 60000);
 
       if (confirmation) {
         // Check if metadata was created
         let metadataCreated = false;
         if (metadataUri) {
           try {
-            metadataCreated = await MetaplexService.metadataExists(connection, mintPublicKey);
+            metadataCreated = await MetaplexService.metadataExists(workingConnection, mintPublicKey);
             console.log('Metadata account exists:', metadataCreated);
           } catch (error) {
             console.error('Error checking metadata:', error);
@@ -271,11 +287,22 @@ ${finalSignature.slice(0, 20)}...${finalSignature.slice(-20)}
 
     } catch (error) {
       console.error('Token creation error:', error);
-      setStatus(`❌ Error creating token: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Provide specific error messages for common issues
+      let errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('CORS')) {
+        errorMessage = `CORS/RPC Connection Error: ${errorMessage}
+        
+This suggests the backend proxy isn't working properly. 
+Please check the console for more details.`;
+      }
+      
+      setStatus(`❌ Error creating token: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, connection, name, symbol, initialSupply, decimals, logoFile, sendTransaction]);
+  }, [publicKey, workingConnection, name, symbol, initialSupply, decimals, logoFile, sendTransaction]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

@@ -222,7 +222,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 ## 🆘 **Support & Community**
 
 - **🌐 Live Site**: [https://trashdotfun.vercel.app](https://trashdotfun.vercel.app)
-- **📱 Telegram**: [@trashdotfun](https://t.me/trashdotfun)
+- **📱 Telegram**: [@trashdotfun](https://t.me/trashdotfungit)
 - **🐦 Twitter**: [@trashdotfun_](https://x.com/trashdotfun_)
 - **🐛 Issues**: [GitHub Issues](https://github.com/GHX5T-SOL/trashdotfun/issues)
 - **📚 Documentation**: [Gorbagana Docs](https://docs.gorbagana.wtf)
