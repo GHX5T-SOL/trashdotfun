@@ -1,148 +1,93 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Transaction, SystemProgram, Keypair, ComputeBudgetProgram, Connection } from '@solana/web3.js';
 import { 
-  TOKEN_PROGRAM_ID, 
-  ASSOCIATED_TOKEN_PROGRAM_ID,
+  Keypair, 
+  Transaction, 
+  SystemProgram,
+  ComputeBudgetProgram,
+  Connection
+} from '@solana/web3.js';
+import { 
   createInitializeMintInstruction,
-  getAssociatedTokenAddress,
-  createAssociatedTokenAccountInstruction,
   createMintToInstruction,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddress,
   MINT_SIZE
 } from '@solana/spl-token';
-import { IPFSService } from '@/lib/ipfs';
-import { MetaplexService } from '@/lib/metaplex';
+import { MetaplexService } from '../lib/metaplex';
+import { IPFSService } from '../lib/ipfs';
 
 export default function CreateToken() {
-  const [name, setName] = useState('');
-  const [symbol, setSymbol] = useState('');
-  const [supply, setSupply] = useState('');
-  const [description, setDescription] = useState('');
-  const [logo, setLogo] = useState<File | null>(null);
-  const [status, setStatus] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
+  
+  const [name, setName] = useState('');
+  const [symbol, setSymbol] = useState('');
+  const [initialSupply, setInitialSupply] = useState<number>(1000000);
+  const [decimals, setDecimals] = useState<number>(9);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [status, setStatus] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Use the proxy connection to avoid CORS issues (as recommended by Gorbagana devs)
-  const proxyConnection = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
-    }
-    return connection;
-  }, [connection]);
-
-  // Use proxy connection for all operations
-  const workingConnection = useMemo(() => {
-    return proxyConnection;
-  }, [proxyConnection]);
-
-  // Custom confirmation function with timeout
+  // Custom transaction confirmation with timeout
   const confirmTransactionWithTimeout = async (
-    signature: string, 
-    connection: Connection, 
-    timeoutMs: number = 30000
-  ): Promise<void> => {
+    connection: Connection,
+    signature: string,
+    timeoutMs: number
+  ): Promise<boolean> => {
     const startTime = Date.now();
     
     while (Date.now() - startTime < timeoutMs) {
       try {
         const status = await connection.getSignatureStatus(signature);
-        
-        if (status.value?.confirmationStatus === 'confirmed' || 
-            status.value?.confirmationStatus === 'finalized') {
-          return;
+        if (status?.value?.confirmationStatus === 'confirmed' || 
+            status?.value?.confirmationStatus === 'finalized') {
+          return true;
         }
-        
-        // Wait 500ms before next check
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-      } catch (error) {
-        console.warn('Error checking transaction status:', error);
-        // Continue polling even if there's an error
         await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.error('Error checking transaction status:', error);
       }
     }
-    
-    throw new Error(`Transaction confirmation timeout after ${timeoutMs}ms`);
+    return false;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!publicKey) {
-      setStatus('Please connect your wallet!');
+  const handleCreateToken = useCallback(async () => {
+    if (!publicKey || !connection) {
+      setStatus('Please connect your wallet first.');
       return;
     }
 
-    if (!name || !symbol || !supply) {
-      setStatus('Please fill in all required fields!');
+    if (!name || !symbol || !initialSupply || !decimals) {
+      setStatus('Please fill in all required fields.');
       return;
     }
 
+    setStatus('Creating token...');
     setIsLoading(true);
-    setStatus('🚀 Starting token creation process...');
 
     try {
-      const decimals = 9;
-      const initialSupply = BigInt(Number(supply) * Math.pow(10, decimals));
-
-      // Step 1: Upload logo to IPFS (if provided)
-      let logoUri = '';
-      if (logo) {
-        setStatus('📤 Uploading logo to IPFS...');
-        try {
-          const ipfsService = new IPFSService();
-          
-          // Log token status for debugging
-          console.log('IPFS Token Status:', ipfsService.getTokenStatus());
-          
-          logoUri = await ipfsService.uploadImage(logo);
-          setStatus(`✅ Logo uploaded to IPFS: ${logoUri}`);
-        } catch (error) {
-          console.error('Logo upload failed:', error);
-          setStatus(`⚠️ Logo upload failed: ${(error as Error).message}. Continuing without logo...`);
-        }
-      }
-
-      // Step 2: Create metadata JSON and upload to IPFS
-      let metadataUri = '';
-      try {
-        setStatus('📝 Creating and uploading metadata to IPFS...');
-        const ipfsService = new IPFSService();
-        const metadata = MetaplexService.createMetadataJSON(
-          name,
-          symbol,
-          description || 'Token created on TrashdotFun',
-          logoUri || 'https://via.placeholder.com/400x400?text=No+Logo'
-        );
-        metadataUri = await ipfsService.uploadMetadata(metadata);
-        setStatus(`✅ Metadata uploaded to IPFS: ${metadataUri}`);
-      } catch (error) {
-        console.error('Metadata upload failed:', error);
-        setStatus(`⚠️ Metadata upload failed: ${(error as Error).message}. Continuing with mock metadata...`);
-        // Use a fallback metadata URI
-        metadataUri = `ipfs://QmMockMetadata${Date.now()}`;
-      }
-
-      // Step 3: Create the token mint
-      setStatus('🪙 Creating token mint...');
+      // Create mint keypair
       const mintKeypair = Keypair.generate();
       const mintPublicKey = mintKeypair.publicKey;
-      
-      // Get the best working connection
-      // const workingConnection = await getWorkingConnection(); // This line is removed
-      
+
+      // Get the minimum rent for exemption
+      const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+
+      // Create mint account instruction
       const createMintAccountIx = SystemProgram.createAccount({
         fromPubkey: publicKey,
         newAccountPubkey: mintPublicKey,
         space: MINT_SIZE,
-        lamports: await workingConnection.getMinimumBalanceForRentExemption(MINT_SIZE),
+        lamports: mintRent,
         programId: TOKEN_PROGRAM_ID,
       });
 
+      // Initialize mint instruction
       const initializeMintIx = createInitializeMintInstruction(
         mintPublicKey,
         decimals,
@@ -151,82 +96,155 @@ export default function CreateToken() {
         TOKEN_PROGRAM_ID
       );
 
-      // Step 4: Create associated token account
-      setStatus('🏦 Creating associated token account...');
-      const associatedTokenAccount = await getAssociatedTokenAddress(
+      // Get associated token account address
+      const associatedTokenAddress = await getAssociatedTokenAddress(
         mintPublicKey,
         publicKey,
         false,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
+        TOKEN_PROGRAM_ID
       );
 
-      // Step 6: Create associated token account
-      setStatus('🏦 Creating associated token account...');
-      const finalBlockhashResponse = await workingConnection.getLatestBlockhash('processed');
-      const finalBlockhash = finalBlockhashResponse.blockhash;
-
-      const finalTx = new Transaction();
-      finalTx.recentBlockhash = finalBlockhash;
-      finalTx.feePayer = publicKey;
-
-      // Add compute budget instructions for better transaction processing
-      finalTx.add(
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
+      // Create associated token account instruction
+      const createATAIx = createAssociatedTokenAccountInstruction(
+        publicKey,
+        associatedTokenAddress,
+        publicKey,
+        mintPublicKey,
+        TOKEN_PROGRAM_ID
       );
 
-      // Add mint creation and initialization instructions
-      finalTx.add(createMintAccountIx, initializeMintIx);
-
-      // CRITICAL FIX: Create associated token account with correct owner
-      const createAssociatedTokenAccountIx = createAssociatedTokenAccountInstruction(
-        publicKey, // payer
-        associatedTokenAccount, // associated token account address
-        publicKey, // owner (this should be the wallet owner, not the mint)
-        mintPublicKey // mint
-      );
-
-      finalTx.add(createAssociatedTokenAccountIx);
-
-      // Add mint to instruction
+      // Mint tokens to the associated token account
       const mintToIx = createMintToInstruction(
         mintPublicKey,
-        associatedTokenAccount,
-        publicKey, // mint authority
-        Number(initialSupply) * Math.pow(10, decimals)
+        associatedTokenAddress,
+        publicKey,
+        Number(initialSupply * Math.pow(10, decimals)),
+        [],
+        TOKEN_PROGRAM_ID
       );
 
-      finalTx.add(mintToIx);
+      // Upload logo to IPFS if provided
+      let logoUri = '';
+      if (logoFile) {
+        setStatus('Uploading logo to IPFS...');
+        try {
+          const ipfsService = new IPFSService();
+          logoUri = await ipfsService.uploadImage(logoFile);
+          console.log('Logo uploaded to IPFS:', logoUri);
+        } catch (error) {
+          console.error('Logo upload failed:', error);
+          setStatus('Logo upload failed, but continuing with token creation...');
+        }
+      }
 
-      // Step 7: Skip problematic Metaplex metadata for now - focus on basic token creation
-      setStatus('⚠️ Skipping metadata creation to avoid 0x4b error - focusing on basic token');
-      console.log('🔗 Skipping Metaplex metadata - this was causing the 0x4b error');
-      
-      // Step 8: Send the complete transaction (without metadata)
-      setStatus('📤 Sending basic token creation transaction...');
-      
-      // Ensure proper signers for the complete transaction
-      const finalSignature = await sendTransaction(finalTx, workingConnection, {
-        signers: [mintKeypair], // Include mint keypair as signer
-        skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
-        maxRetries: 3,
-        preflightCommitment: 'processed'
-      });
-      
-      await confirmTransactionWithTimeout(finalSignature, workingConnection, 30000);
-
-      // Step 8: Verify basic token creation
-      setStatus('🔍 Verifying token creation...');
-      
-      try {
-        // Verify the mint account was created
-        const mintAccountInfo = await workingConnection.getAccountInfo(mintPublicKey);
-        if (mintAccountInfo) {
-          setStatus('✅ Token created successfully!');
+      // Create metadata JSON
+      let metadataUri = '';
+      if (logoUri) {
+        setStatus('Creating metadata...');
+        try {
+          const metadata = {
+            name,
+            symbol,
+            description: `Token created on TrashdotFun - ${name} (${symbol})`,
+            image: logoUri,
+            attributes: [],
+            properties: {
+              files: [
+                {
+                  type: "image/png",
+                  uri: logoUri
+                }
+              ],
+              category: "image",
+              creators: []
+            }
+          };
           
-          // Show success message with token details
-          setStatus(`🎉 Token "${name}" (${symbol}) created successfully!
+          // Upload metadata to IPFS
+          const ipfsService = new IPFSService();
+          metadataUri = await ipfsService.uploadMetadata(metadata);
+          console.log('Metadata uploaded to IPFS:', metadataUri);
+        } catch (error) {
+          console.error('Metadata creation failed:', error);
+          setStatus('Metadata creation failed, but continuing with token creation...');
+        }
+      }
+
+      // Create Metaplex metadata instruction if we have metadata
+      let metadataIx = null;
+      if (metadataUri) {
+        try {
+          setStatus('Creating Metaplex metadata...');
+          metadataIx = MetaplexService.createLatestMetadataInstruction(
+            mintPublicKey,
+            publicKey,
+            publicKey,
+            name,
+            symbol,
+            metadataUri
+          );
+          console.log('Metaplex metadata instruction created');
+        } catch (error) {
+          console.error('Metaplex metadata instruction failed:', error);
+          setStatus('Metaplex metadata failed, but continuing with token creation...');
+        }
+      }
+
+      // Add compute budget instructions for priority fees
+      const modifyComputeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({
+        units: 400_000,
+      });
+
+      const addPriorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: 50_000,
+      });
+
+      // Build final transaction
+      const finalTx = new Transaction();
+      
+      // Add compute budget instructions first
+      finalTx.add(modifyComputeUnitsIx, addPriorityFeeIx);
+      
+      // Add token creation instructions
+      finalTx.add(createMintAccountIx, initializeMintIx, createATAIx, mintToIx);
+      
+      // Add metadata instruction if available
+      if (metadataIx) {
+        finalTx.add(metadataIx);
+      }
+
+      // Get recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash('finalized');
+      finalTx.recentBlockhash = blockhash;
+      finalTx.feePayer = publicKey;
+
+      // Sign and send transaction
+      setStatus('Signing and sending transaction...');
+      const finalSignature = await sendTransaction(finalTx, connection, {
+        signers: [mintKeypair],
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+        maxRetries: 3,
+      });
+
+      // Wait for confirmation
+      setStatus('Waiting for transaction confirmation...');
+      const confirmation = await confirmTransactionWithTimeout(connection, finalSignature, 60000);
+
+      if (confirmation) {
+        // Check if metadata was created
+        let metadataCreated = false;
+        if (metadataUri) {
+          try {
+            metadataCreated = await MetaplexService.metadataExists(connection, mintPublicKey);
+            console.log('Metadata account exists:', metadataCreated);
+          } catch (error) {
+            console.error('Error checking metadata:', error);
+          }
+        }
+
+        // Show success message
+        setStatus(`🎉 Token "${name}" (${symbol}) created successfully!
 
 **Token Details:**
 • **Name**: ${name}
@@ -244,190 +262,160 @@ ${finalSignature.slice(0, 20)}...${finalSignature.slice(-20)}
   https://trashcan.io/address/${mintPublicKey.toString()}
 • **Add to Wallet**: Use the mint address above
 
-**Note**: Metadata was skipped to avoid errors. Token will work without metadata.`);
-        } else {
-          setStatus('❌ Token creation failed - mint account not found');
-        }
-      } catch (error) {
-        console.error('Error verifying token creation:', error);
-        setStatus('⚠️ Token creation verification failed, but transaction may have succeeded');
-      }
+**Metadata Status**: ${metadataCreated ? '✅ Created successfully' : '❌ Not created'}
 
-      // Reset form
-      setName('');
-      setSymbol('');
-      setSupply('');
-      setDescription('');
-      setLogo(null);
+**Note**: ${metadataCreated ? 'Token has full metadata support!' : 'Token created without metadata but will still function.'}`);
+      } else {
+        setStatus('❌ Transaction failed to confirm within timeout. Please check the explorer.');
+      }
 
     } catch (error) {
       console.error('Token creation error:', error);
-      
-      // Provide specific error messages for common issues
-      let errorMessage = (error as Error).message;
-      
-      if (errorMessage.includes('block height exceeded')) {
-        errorMessage = `Transaction expired due to network congestion. 
-        
-The transaction was sent successfully but took too long to confirm. 
-This is common on congested networks like Gorbagana testnet.
-
-**What to do:**
-1. Check Trashscan.io for transaction status
-2. Wait a few minutes for network to process
-3. Try again with a smaller transaction if needed
-
-**Transaction may still succeed despite the error!**`;
-      }
-      
-      setStatus(`❌ **ERROR**: ${errorMessage}
-
-Please try again or contact support if the issue persists.`);
+      setStatus(`❌ Error creating token: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
+    }
+  }, [publicKey, connection, name, symbol, initialSupply, decimals, logoFile, sendTransaction]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setLogoFile(file);
+    } else {
+      setStatus('Please select a valid image file.');
     }
   };
 
   return (
-    <div className="bg-gray-900 p-8 rounded-lg shadow-2xl w-full max-w-md border border-gray-700">
-      <WalletMultiButton className="mb-6 w-full bg-trash-yellow text-black py-3 rounded-lg hover:bg-yellow-600 transition-colors font-semibold" />
-      
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-white mb-2">Token Name *</label>
-          <input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all"
-            placeholder="e.g., TrashCoin"
-            required
-            disabled={isLoading}
-          />
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-2xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-green-400 mb-4">🗑️ TrashdotFun</h1>
+          <p className="text-xl text-gray-300">Create Your Trash Token on Gorbagana Chain</p>
         </div>
-        
-        <div>
-          <label htmlFor="symbol" className="block text-sm font-medium text-white mb-2">Token Symbol *</label>
-          <input
-            id="symbol"
-            type="text"
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-            className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all"
-            placeholder="e.g., TRASH"
-            maxLength={10}
-            required
-            disabled={isLoading}
-          />
+
+        <div className="bg-gray-800 rounded-lg p-6 mb-6">
+          <WalletMultiButton className="w-full mb-6" />
+          
+          {!publicKey && (
+            <p className="text-center text-gray-400">
+              Connect your wallet to start creating tokens
+            </p>
+          )}
         </div>
-        
-        <div>
-          <label htmlFor="supply" className="block text-sm font-medium text-white mb-2">Total Supply *</label>
-          <input
-            id="supply"
-            type="number"
-            value={supply}
-            onChange={(e) => setSupply(e.target.value)}
-            className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all"
-            placeholder="e.g., 1000000"
-            min="1"
-            required
-            disabled={isLoading}
-          />
-          <p className="text-xs text-gray-400 mt-1">Will be minted with 9 decimals</p>
-        </div>
-        
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium text-white mb-2">Description</label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all"
-            placeholder="Describe your token..."
-            rows={3}
-            disabled={isLoading}
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="logo" className="block text-sm font-medium text-white mb-2">Token Logo</label>
-          <input
-            id="logo"
-            type="file"
-            onChange={(e) => setLogo(e.target.files?.[0] || null)}
-            className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-trash-yellow file:text-black hover:file:bg-yellow-600"
-            accept="image/*"
-            disabled={isLoading}
-            aria-describedby="logo-help"
-          />
-          <p id="logo-help" className="text-xs text-gray-400 mt-1">
-            Logo will be uploaded to IPFS and linked to your token metadata
-          </p>
-        </div>
-        
-        <button
-          type="submit"
-          className={`w-full py-3 rounded-lg font-semibold transition-all ${
-            isLoading 
-              ? 'bg-gray-600 text-gray-300 cursor-not-allowed' 
-              : 'bg-trash-yellow text-black hover:bg-yellow-600 hover:scale-105'
-          }`}
-          disabled={!publicKey || isLoading}
-        >
-          {isLoading ? '🚀 Creating Token...' : '🚀 Create Token'}
-        </button>
-      </form>
-      
-      {status && (
-        <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-          <div className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed">
-            {status}
-          </div>
-        </div>
-      )}
-      
-      <div className="mt-6 text-xs text-gray-400 text-center">
-        <p>Powered by Gorbagana Chain</p>
-        <p>Explorer: <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-trash-yellow hover:underline">trashscan.io</a></p>
-        <p>Token Program: {TOKEN_PROGRAM_ID.toBase58()}</p>
-        <p>Metaplex: {MetaplexService.METADATA_PROGRAM_ID.toBase58()}</p>
-        <p className="mt-2 text-yellow-400">⚠️ Network congestion may cause delays</p>
-        
-        {/* IPFS Status Display */}
-        <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-700">
-          <p className="text-xs text-gray-300 mb-2">IPFS Status:</p>
-          <p className="text-xs text-gray-400">
-            {(() => {
-              const ipfsService = new IPFSService();
-              return ipfsService.getTokenStatus();
-            })()}
-          </p>
-          {(() => {
-            const ipfsService = new IPFSService();
-            if (ipfsService.isRealIPFSAvailable()) {
-              return (
-                <div className="mt-2">
-                  <p className="text-xs text-orange-400 mb-1">
-                    ⚠️ Real IPFS requires UCAN setup
-                  </p>
-                  <p className="text-xs text-blue-400">
-                    💡 <a href="https://docs.storacha.network" target="_blank" rel="noopener noreferrer" className="underline">Setup UCANs with Storacha Network</a>
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Currently using mock service for development
-                  </p>
-                </div>
-              );
-            } else {
-              return (
-                <p className="text-xs text-orange-400 mt-1">
-                  💡 Get free IPFS storage at <a href="https://console.storacha.network" target="_blank" rel="noopener noreferrer" className="underline">Storacha Network</a>
+
+        {publicKey && (
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-2xl font-bold mb-6 text-green-400">Create New Token</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Token Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="e.g., Oscar's Garbage Coin"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Token Symbol
+                </label>
+                <input
+                  type="text"
+                  value={symbol}
+                  onChange={(e) => setSymbol(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="e.g., OGC"
+                  maxLength={6}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Initial Supply
+                </label>
+                <input
+                  type="number"
+                  value={initialSupply}
+                  onChange={(e) => setInitialSupply(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="1000000"
+                  min="1"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Decimals
+                </label>
+                <input
+                  type="number"
+                  value={decimals}
+                  onChange={(e) => setDecimals(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="9"
+                  min="0"
+                  max="9"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="logo-file" className="block text-sm font-medium text-gray-300 mb-2">
+                  Token Logo (Optional)
+                </label>
+                <input
+                  id="logo-file"
+                  type="file"
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  aria-label="Upload token logo image"
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  Supported formats: PNG, JPG, GIF
                 </p>
-              );
-            }
-          })()}
+              </div>
+
+              <button
+                onClick={handleCreateToken}
+                disabled={isLoading || !name || !symbol || !initialSupply}
+                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-md transition-colors duration-200"
+              >
+                {isLoading ? 'Creating Token...' : 'Create Token'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status && (
+          <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+            <div className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed">
+              {status}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 text-center text-sm text-gray-400">
+          <p>Powered by Gorbagana Chain</p>
+          <p className="mt-2">
+            Explorer: <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300">trashscan.io</a>
+          </p>
+          <p className="mt-1">
+            Token Program: <code className="bg-gray-700 px-2 py-1 rounded text-xs">TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA</code>
+          </p>
+          <p className="mt-1">
+            Metaplex: <code className="bg-gray-700 px-2 py-1 rounded text-xs">metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s</code>
+          </p>
+          <div className="mt-4 flex items-center justify-center text-yellow-400">
+            <span className="mr-2">⚠️</span>
+            <span>Network congestion may cause delays</span>
+          </div>
         </div>
       </div>
     </div>
