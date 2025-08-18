@@ -28,10 +28,18 @@ export default function CreateToken() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
 
-  // Use the original connection directly - no more proxy complexity
-  const workingConnection = useMemo(() => {
+  // Use the proxy connection to avoid CORS issues (as recommended by Gorbagana devs)
+  const proxyConnection = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
+    }
     return connection;
   }, [connection]);
+
+  // Use proxy connection for all operations
+  const workingConnection = useMemo(() => {
+    return proxyConnection;
+  }, [proxyConnection]);
 
   // Custom confirmation function with timeout
   const confirmTransactionWithTimeout = async (
@@ -212,8 +220,9 @@ export default function CreateToken() {
       // Use aggressive confirmation with shorter timeout
       setStatus('⏳ Waiting for mint confirmation (30s timeout)...');
       
-      // Simple, direct transaction - no more proxy complexity
+      // CRITICAL: Include the mint keypair as a signer for the transaction to be valid
       const mintSignature = await sendTransaction(transaction, workingConnection, {
+        signers: [mintKeypair], // This is the missing piece - the mint keypair must sign
         skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
         maxRetries: 3,
         preflightCommitment: 'processed'
@@ -254,8 +263,9 @@ export default function CreateToken() {
 
         setStatus('📤 Sending metadata transaction...');
         
-        // Simple, direct metadata transaction
+        // Ensure proper signers for metadata transaction
         const metadataSignature = await sendTransaction(metadataTx, workingConnection, {
+          signers: [], // No additional signers needed for metadata
           skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
           maxRetries: 3,
           preflightCommitment: 'processed'
@@ -290,8 +300,9 @@ export default function CreateToken() {
 
       setStatus('📤 Sending final transaction...');
       
-      // Simple, direct final transaction
+      // Ensure proper signers for final transaction
       const mintToSignature = await sendTransaction(finalTx, workingConnection, {
+        signers: [], // No additional signers needed for final transaction
         skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
         maxRetries: 3,
         preflightCommitment: 'processed'
