@@ -1,17 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Transaction, SystemProgram, Keypair, ComputeBudgetProgram, Connection } from '@solana/web3.js';
 import { 
   TOKEN_PROGRAM_ID, 
-  createInitializeMintInstruction, 
-  getAssociatedTokenAddress, 
-  createAssociatedTokenAccountInstruction, 
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createInitializeMintInstruction,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
   createMintToInstruction,
-  MINT_SIZE,
-  ASSOCIATED_TOKEN_PROGRAM_ID
+  MINT_SIZE
 } from '@solana/spl-token';
 import { IPFSService } from '@/lib/ipfs';
 import { MetaplexService } from '@/lib/metaplex';
@@ -23,6 +23,7 @@ export default function CreateToken() {
   const [description, setDescription] = useState('');
   const [logo, setLogo] = useState<File | null>(null);
   const [status, setStatus] = useState('');
+  const [metadataExists, setMetadataExists] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
@@ -33,6 +34,15 @@ export default function CreateToken() {
     console.log('🔗 CreateToken - Expected proxy endpoint:', `${window.location.origin}/api/rpc`);
     console.log('🔗 CreateToken - Using proxy:', connection.rpcEndpoint.includes('/api/rpc'));
   }
+
+  // Override the connection to force all RPC calls through our proxy
+  const proxyConnection = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      // Create a new connection that forces all RPC calls through our proxy
+      return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
+    }
+    return connection;
+  }, [connection]);
 
   // Custom confirmation function with timeout
   const confirmTransactionWithTimeout = async (
@@ -130,7 +140,7 @@ export default function CreateToken() {
         fromPubkey: publicKey,
         newAccountPubkey: mintPublicKey,
         space: MINT_SIZE,
-        lamports: await connection.getMinimumBalanceForRentExemption(MINT_SIZE),
+        lamports: await proxyConnection.getMinimumBalanceForRentExemption(MINT_SIZE),
         programId: TOKEN_PROGRAM_ID,
       });
 
@@ -194,7 +204,7 @@ export default function CreateToken() {
       let blockhash = '';
       for (let attempt = 1; attempt <= 5; attempt++) {
         try {
-          const { blockhash: recentBlockhash } = await connection.getLatestBlockhash('processed');
+          const { blockhash: recentBlockhash } = await proxyConnection.getLatestBlockhash('processed');
           blockhash = recentBlockhash;
           break;
         } catch (error) {
@@ -209,8 +219,8 @@ export default function CreateToken() {
 
       // Use aggressive confirmation with shorter timeout
       setStatus('⏳ Waiting for mint confirmation (30s timeout)...');
-      const mintSignature = await sendTransaction(transaction, connection);
-      await confirmTransactionWithTimeout(mintSignature, connection, 30000);
+      const mintSignature = await sendTransaction(transaction, proxyConnection);
+      await confirmTransactionWithTimeout(mintSignature, proxyConnection, 30000);
 
       setStatus('✅ Mint account created successfully! Creating metadata...');
 
@@ -220,7 +230,7 @@ export default function CreateToken() {
       let metadataSignature = '';
       
       try {
-        const newBlockhashResponse = await connection.getLatestBlockhash('processed');
+        const newBlockhashResponse = await proxyConnection.getLatestBlockhash('processed');
         const newBlockhash = newBlockhashResponse.blockhash;
         
         const metadataInstruction = MetaplexService.createLatestMetadataInstruction(
@@ -244,8 +254,8 @@ export default function CreateToken() {
         );
 
         setStatus('📤 Sending metadata transaction...');
-        metadataSignature = await sendTransaction(metadataTx, connection);
-        await confirmTransactionWithTimeout(metadataSignature, connection, 30000);
+        metadataSignature = await sendTransaction(metadataTx, proxyConnection);
+        await confirmTransactionWithTimeout(metadataSignature, proxyConnection, 30000);
         
         metadataCreated = true;
         setStatus('✅ Metadata created successfully!');
@@ -257,7 +267,7 @@ export default function CreateToken() {
       }
 
       setStatus('🏦 Creating associated token account...');
-      const finalBlockhashResponse = await connection.getLatestBlockhash('processed');
+      const finalBlockhashResponse = await proxyConnection.getLatestBlockhash('processed');
       const finalBlockhash = finalBlockhashResponse.blockhash;
 
       const finalTx = new Transaction({
@@ -273,19 +283,21 @@ export default function CreateToken() {
       );
 
       setStatus('📤 Sending final transaction...');
-      const mintToSignature = await sendTransaction(finalTx, connection);
-      await confirmTransactionWithTimeout(mintToSignature, connection, 30000);
+      const mintToSignature = await sendTransaction(finalTx, proxyConnection);
+      await confirmTransactionWithTimeout(mintToSignature, proxyConnection, 30000);
 
       // Step 8: Verify metadata account was created (if attempted)
       if (metadataCreated) {
         setStatus('🔍 Verifying metadata account...');
         try {
-          const metadataExists = await MetaplexService.verifyMetadataAccount(
-            connection,
+          const metadataVerified = await MetaplexService.verifyMetadataAccount(
+            proxyConnection,
             mintPublicKey
           );
 
-          if (metadataExists) {
+          setMetadataExists(metadataVerified);
+
+          if (metadataVerified) {
             setStatus('✅ Metadata account verified successfully!');
           } else {
             setStatus('⚠️ Metadata account verification failed, but token was created');
@@ -293,6 +305,7 @@ export default function CreateToken() {
         } catch (error) {
           console.warn('Metadata verification failed:', error);
           setStatus('⚠️ Metadata verification failed, but token was created successfully');
+          setMetadataExists(false);
         }
       }
 
