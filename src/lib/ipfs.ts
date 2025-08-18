@@ -120,7 +120,7 @@ export class IPFSService {
   /**
    * Mock metadata upload for fallback
    */
-  private async mockMetadataUpload(metadata: Record<string, unknown>): Promise<string> {
+  private async mockMetadataUpload(): Promise<string> {
     console.log('Using mock IPFS service for metadata');
     
     // Simulate upload delay

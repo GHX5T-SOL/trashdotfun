@@ -107,20 +107,22 @@ export default function CreateToken() {
 
       // Step 3: Get recent blockhash with aggressive retry
       setStatus('🔗 Getting recent blockhash...');
-      let blockhash: string;
-      let lastValidBlockHeight: number;
+      let blockhash = '';
       
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const blockhashResponse = await connection.getLatestBlockhash('processed'); // Use 'processed' for faster response
           blockhash = blockhashResponse.blockhash;
-          lastValidBlockHeight = blockhashResponse.lastValidBlockHeight;
           break;
-        } catch (error) {
+        } catch {
           if (attempt === 4) throw new Error('Failed to get recent blockhash after 5 attempts');
           setStatus(`🔗 Blockhash attempt ${attempt + 1}/5 failed, retrying...`);
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
+      }
+      
+      if (!blockhash) {
+        throw new Error('Failed to get blockhash after all attempts');
       }
 
       // Step 4: Generate mint account keypair
@@ -179,7 +181,6 @@ export default function CreateToken() {
       // Step 6: Create metadata account with Metaplex
       const newBlockhashResponse = await connection.getLatestBlockhash('processed');
       const newBlockhash = newBlockhashResponse.blockhash;
-      const newLastValidBlockHeight = newBlockhashResponse.lastValidBlockHeight;
 
       const metadataTx = new Transaction({
         recentBlockhash: newBlockhash,
@@ -218,7 +219,6 @@ export default function CreateToken() {
       // Step 7: Create associated token account and mint tokens
       const finalBlockhashResponse = await connection.getLatestBlockhash('processed');
       const finalBlockhash = finalBlockhashResponse.blockhash;
-      const finalLastValidBlockHeight = finalBlockhashResponse.lastValidBlockHeight;
 
       const tokenTx = new Transaction({
         recentBlockhash: finalBlockhash,
