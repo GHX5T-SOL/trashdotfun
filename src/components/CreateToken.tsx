@@ -28,34 +28,10 @@ export default function CreateToken() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
 
-  // Debug logging to check connection endpoint
-  if (typeof window !== 'undefined') {
-    console.log('🔗 CreateToken - Connection endpoint:', connection.rpcEndpoint);
-    console.log('🔗 CreateToken - Expected proxy endpoint:', `${window.location.origin}/api/rpc`);
-    console.log('🔗 CreateToken - Using proxy:', connection.rpcEndpoint.includes('/api/rpc'));
-  }
-
-  // Override the connection to force all RPC calls through our proxy
-  const proxyConnection = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      // Create a new connection that forces all RPC calls through our proxy
-      return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
-    }
+  // Use the original connection directly - no more proxy complexity
+  const workingConnection = useMemo(() => {
     return connection;
   }, [connection]);
-
-  // Fallback connection strategy: try proxy first, then fallback to original
-  const getWorkingConnection = async () => {
-    try {
-      // Test if proxy connection is working
-      await proxyConnection.getLatestBlockhash('processed');
-      console.log('🔗 Using proxy connection successfully');
-      return proxyConnection;
-    } catch (error) {
-      console.warn('🔗 Proxy connection failed, falling back to original connection:', error);
-      return connection;
-    }
-  };
 
   // Custom confirmation function with timeout
   const confirmTransactionWithTimeout = async (
@@ -150,7 +126,7 @@ export default function CreateToken() {
       const mintPublicKey = mintKeypair.publicKey;
       
       // Get the best working connection
-      const workingConnection = await getWorkingConnection();
+      // const workingConnection = await getWorkingConnection(); // This line is removed
       
       const createMintAccountIx = SystemProgram.createAccount({
         fromPubkey: publicKey,
@@ -236,29 +212,12 @@ export default function CreateToken() {
       // Use aggressive confirmation with shorter timeout
       setStatus('⏳ Waiting for mint confirmation (30s timeout)...');
       
-      let mintSignature: string;
-      try {
-        // Try with proxy connection first
-        mintSignature = await sendTransaction(transaction, workingConnection, {
-          skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
-          maxRetries: 3,
-          preflightCommitment: 'processed'
-        });
-      } catch (error: unknown) {
-        console.warn('🔗 Proxy connection failed, trying original connection:', error);
-        
-        // If proxy fails, force use of original connection
-        if (error instanceof Error && (error.name === 'WalletSendTransactionError' || error.message?.includes('Failed to fetch'))) {
-          console.log('🔗 Falling back to original connection for transaction');
-          mintSignature = await sendTransaction(transaction, connection, {
-            skipPreflight: true,
-            maxRetries: 3,
-            preflightCommitment: 'processed'
-          });
-        } else {
-          throw error; // Re-throw if it's not a connection issue
-        }
-      }
+      // Simple, direct transaction - no more proxy complexity
+      const mintSignature = await sendTransaction(transaction, workingConnection, {
+        skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
+        maxRetries: 3,
+        preflightCommitment: 'processed'
+      });
       
       await confirmTransactionWithTimeout(mintSignature, workingConnection, 30000);
 
@@ -295,30 +254,12 @@ export default function CreateToken() {
 
         setStatus('📤 Sending metadata transaction...');
         
-        const metadataSignature = await (async () => {
-          try {
-            // Try with proxy connection first
-            return await sendTransaction(metadataTx, workingConnection, {
-              skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
-              maxRetries: 3,
-              preflightCommitment: 'processed'
-            });
-          } catch (error: unknown) {
-            console.warn('🔗 Proxy connection failed for metadata, trying original connection:', error);
-            
-            // If proxy fails, force use of original connection
-            if (error instanceof Error && (error.name === 'WalletSendTransactionError' || error.message?.includes('Failed to fetch'))) {
-              console.log('🔗 Falling back to original connection for metadata transaction');
-              return await sendTransaction(metadataTx, connection, {
-                skipPreflight: true,
-                maxRetries: 3,
-                preflightCommitment: 'processed'
-              });
-            } else {
-              throw error; // Re-throw if it's not a connection issue
-            }
-          }
-        })();
+        // Simple, direct metadata transaction
+        const metadataSignature = await sendTransaction(metadataTx, workingConnection, {
+          skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
+          maxRetries: 3,
+          preflightCommitment: 'processed'
+        });
         
         await confirmTransactionWithTimeout(metadataSignature, workingConnection, 30000);
         
@@ -349,30 +290,12 @@ export default function CreateToken() {
 
       setStatus('📤 Sending final transaction...');
       
-      const mintToSignature = await (async () => {
-        try {
-          // Try with proxy connection first
-          return await sendTransaction(finalTx, workingConnection, {
-            skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
-            maxRetries: 3,
-            preflightCommitment: 'processed'
-          });
-        } catch (error: unknown) {
-          console.warn('🔗 Proxy connection failed for final transaction, trying original connection:', error);
-          
-          // If proxy fails, force use of original connection
-          if (error instanceof Error && (error.name === 'WalletSendTransactionError' || error.message?.includes('Failed to fetch'))) {
-            console.log('🔗 Falling back to original connection for final transaction');
-            return await sendTransaction(finalTx, connection, {
-              skipPreflight: true,
-              maxRetries: 3,
-              preflightCommitment: 'processed'
-            });
-          } else {
-            throw error; // Re-throw if it's not a connection issue
-          }
-        }
-      })();
+      // Simple, direct final transaction
+      const mintToSignature = await sendTransaction(finalTx, workingConnection, {
+        skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
+        maxRetries: 3,
+        preflightCommitment: 'processed'
+      });
       
       await confirmTransactionWithTimeout(mintToSignature, workingConnection, 30000);
 
