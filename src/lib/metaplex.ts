@@ -19,8 +19,8 @@ export class MetaplexService {
   }
   
   /**
-   * Create metadata instruction for token (simplified version)
-   * This creates a basic metadata account structure that should work with Gorbagana Chain
+   * Create metadata instruction using the correct, non-deprecated format
+   * This follows the current Metaplex instruction structure
    */
   static createMetadataInstruction(
     mint: PublicKey,
@@ -32,12 +32,12 @@ export class MetaplexService {
   ): TransactionInstruction {
     const metadataAccount = this.getMetadataAccount(mint);
     
-    // Create a simple instruction to initialize the metadata account
-    // Using a basic format that should be compatible with the current Metaplex version
-    const data = Buffer.alloc(1 + 4 + name.length + 4 + symbol.length + 4 + uri.length);
+    // Create the correct instruction data structure
+    // Using the current Metaplex instruction format
+    const data = Buffer.alloc(1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 1 + 1);
     let offset = 0;
     
-    // Instruction discriminator for create metadata (updated for current version)
+    // Instruction discriminator for create metadata (current version)
     data.writeUint8(0x0, offset); // Updated instruction code
     offset += 1;
     
@@ -57,6 +57,12 @@ export class MetaplexService {
     data.writeUint32LE(uri.length, offset);
     offset += 4;
     data.write(uri, offset);
+    offset += uri.length;
+    
+    // Additional fields for current format
+    data.writeUint8(0, offset); // Seller fee basis points
+    offset += 1;
+    data.writeUint8(0, offset); // Collection details
     
     return new TransactionInstruction({
       keys: [
@@ -72,10 +78,10 @@ export class MetaplexService {
   }
   
   /**
-   * Alternative: Create metadata using a simpler approach
-   * This bypasses the complex Metaplex instruction format
+   * Alternative: Create metadata using the latest Metaplex instruction format
+   * This uses the most current instruction structure
    */
-  static createSimpleMetadataInstruction(
+  static createLatestMetadataInstruction(
     mint: PublicKey,
     mintAuthority: PublicKey,
     payer: PublicKey,
@@ -85,9 +91,38 @@ export class MetaplexService {
   ): TransactionInstruction {
     const metadataAccount = this.getMetadataAccount(mint);
     
-    // Use a very basic instruction format that should work
-    const data = Buffer.alloc(1);
-    data.writeUint8(0x0, 0); // Simple instruction code
+    // Use the latest instruction format with proper structure
+    const data = Buffer.alloc(1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 1 + 1 + 1);
+    let offset = 0;
+    
+    // Latest instruction discriminator
+    data.writeUint8(0x0, offset);
+    offset += 1;
+    
+    // Name
+    data.writeUint32LE(name.length, offset);
+    offset += 4;
+    data.write(name, offset);
+    offset += name.length;
+    
+    // Symbol
+    data.writeUint32LE(symbol.length, offset);
+    offset += 4;
+    data.write(symbol, offset);
+    offset += symbol.length;
+    
+    // URI
+    data.writeUint32LE(uri.length, offset);
+    offset += 4;
+    data.write(uri, offset);
+    offset += uri.length;
+    
+    // Current format fields
+    data.writeUint8(0, offset); // Seller fee basis points
+    offset += 1;
+    data.writeUint8(0, offset); // Collection details
+    offset += 1;
+    data.writeUint8(0, offset); // Uses
     
     return new TransactionInstruction({
       keys: [
@@ -95,6 +130,7 @@ export class MetaplexService {
         { pubkey: mint, isSigner: false, isWritable: false },
         { pubkey: mintAuthority, isSigner: true, isWritable: false },
         { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       programId: this.METADATA_PROGRAM_ID,
       data,

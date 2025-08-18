@@ -207,37 +207,49 @@ export default function CreateToken() {
 
       setStatus('✅ Mint account created successfully! Creating metadata...');
 
-      // Step 7: Create metadata account with Metaplex
-      const newBlockhashResponse = await connection.getLatestBlockhash('processed');
-      const newBlockhash = newBlockhashResponse.blockhash;
+      // Step 7: Create metadata account with Metaplex (with fallback)
+      setStatus('📝 Creating metadata account...');
+      let metadataCreated = false;
+      let metadataSignature = '';
       
-      const metadataInstruction = MetaplexService.createSimpleMetadataInstruction(
-        mintPublicKey,
-        publicKey,
-        publicKey,
-        name,
-        symbol,
-        metadataUri
-      );
+      try {
+        const newBlockhashResponse = await connection.getLatestBlockhash('processed');
+        const newBlockhash = newBlockhashResponse.blockhash;
+        
+        const metadataInstruction = MetaplexService.createLatestMetadataInstruction(
+          mintPublicKey,
+          publicKey,
+          publicKey,
+          name,
+          symbol,
+          metadataUri
+        );
 
-      const metadataTx = new Transaction({
-        recentBlockhash: newBlockhash,
-        feePayer: publicKey,
-      });
+        const metadataTx = new Transaction({
+          recentBlockhash: newBlockhash,
+          feePayer: publicKey,
+        });
 
-      metadataTx.add(
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
-        metadataInstruction
-      );
+        metadataTx.add(
+          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
+          metadataInstruction
+        );
 
-      setStatus('📤 Sending metadata transaction...');
-      const metadataSignature = await sendTransaction(metadataTx, connection);
-      await confirmTransactionWithTimeout(metadataSignature, connection, 30000);
+        setStatus('📤 Sending metadata transaction...');
+        metadataSignature = await sendTransaction(metadataTx, connection);
+        await confirmTransactionWithTimeout(metadataSignature, connection, 30000);
+        
+        metadataCreated = true;
+        setStatus('✅ Metadata created successfully!');
+        
+      } catch (error) {
+        console.warn('Metadata creation failed:', error);
+        setStatus('⚠️ Metadata creation failed, but continuing with token creation...');
+        // Continue without metadata - token will still be created
+      }
 
-      setStatus('✅ Metadata created! Creating associated token account...');
-
-      // Step 8: Create associated token account and mint tokens
+      setStatus('🏦 Creating associated token account...');
       const finalBlockhashResponse = await connection.getLatestBlockhash('processed');
       const finalBlockhash = finalBlockhashResponse.blockhash;
 
@@ -257,17 +269,24 @@ export default function CreateToken() {
       const mintToSignature = await sendTransaction(finalTx, connection);
       await confirmTransactionWithTimeout(mintToSignature, connection, 30000);
 
-      // Step 9: Verify metadata account was created
-      setStatus('🔍 Verifying metadata account...');
-      const metadataExists = await MetaplexService.verifyMetadataAccount(
-        connection,
-        mintPublicKey
-      );
+      // Step 8: Verify metadata account was created (if attempted)
+      if (metadataCreated) {
+        setStatus('🔍 Verifying metadata account...');
+        try {
+          const metadataExists = await MetaplexService.verifyMetadataAccount(
+            connection,
+            mintPublicKey
+          );
 
-      if (metadataExists) {
-        setStatus('✅ Metadata account verified successfully!');
-      } else {
-        setStatus('⚠️ Metadata account verification failed, but token was created');
+          if (metadataExists) {
+            setStatus('✅ Metadata account verified successfully!');
+          } else {
+            setStatus('⚠️ Metadata account verification failed, but token was created');
+          }
+        } catch (error) {
+          console.warn('Metadata verification failed:', error);
+          setStatus('⚠️ Metadata verification failed, but token was created successfully');
+        }
       }
 
       setStatus(`🎉 **TOKEN CREATED SUCCESSFULLY!** 🎉
