@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Transaction, SystemProgram, Keypair } from '@solana/web3.js';
+import { Transaction, SystemProgram, Keypair, ComputeBudgetProgram } from '@solana/web3.js';
 import { 
   TOKEN_PROGRAM_ID, 
   createInitializeMintInstruction, 
@@ -25,6 +25,34 @@ export default function CreateToken() {
   const [isLoading, setIsLoading] = useState(false);
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
+
+  // Enhanced transaction confirmation with aggressive timeout
+  const confirmTransactionWithTimeout = async (signature: string, connection: any, timeoutMs: number = 30000) => {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        const status = await connection.getSignatureStatus(signature);
+        
+        if (status.value?.confirmationStatus === 'confirmed' || status.value?.confirmationStatus === 'finalized') {
+          return { success: true, status: status.value.confirmationStatus };
+        }
+        
+        if (status.value?.err) {
+          throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`);
+        }
+        
+        // Wait 500ms before checking again
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (error) {
+        console.warn('Status check failed, retrying...', error);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    throw new Error('Transaction confirmation timeout - transaction may still be processing');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,17 +105,22 @@ export default function CreateToken() {
         throw new Error('Failed to upload metadata to IPFS');
       }
 
-      // Step 3: Get recent blockhash with retry mechanism
+      // Step 3: Get recent blockhash with aggressive retry
       setStatus('🔗 Getting recent blockhash...');
       let blockhash: string;
       let lastValidBlockHeight: number;
       
-      try {
-        const blockhashResponse = await connection.getLatestBlockhash('finalized');
-        blockhash = blockhashResponse.blockhash;
-        lastValidBlockHeight = blockhashResponse.lastValidBlockHeight;
-      } catch {
-        throw new Error('Failed to get recent blockhash. Please try again.');
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const blockhashResponse = await connection.getLatestBlockhash('processed'); // Use 'processed' for faster response
+          blockhash = blockhashResponse.blockhash;
+          lastValidBlockHeight = blockhashResponse.lastValidBlockHeight;
+          break;
+        } catch (error) {
+          if (attempt === 4) throw new Error('Failed to get recent blockhash after 5 attempts');
+          setStatus(`🔗 Blockhash attempt ${attempt + 1}/5 failed, retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
       // Step 4: Generate mint account keypair
@@ -97,12 +130,22 @@ export default function CreateToken() {
       // Calculate rent for mint account
       const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
       
-      // Step 5: Create and initialize mint account
-      setStatus('🏗️ Creating mint account...');
+      // Step 5: Create and initialize mint account with priority fees
+      setStatus('🏗️ Creating mint account with priority fees...');
       const mintTx = new Transaction({
         recentBlockhash: blockhash,
         feePayer: publicKey,
       });
+
+      // Add priority fee instruction
+      mintTx.add(
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: 50000 // Higher priority fee for faster processing
+        }),
+        ComputeBudgetProgram.setComputeUnitLimit({
+          units: 200000 // Higher compute limit
+        })
+      );
 
       mintTx.add(
         SystemProgram.createAccount({
@@ -127,21 +170,14 @@ export default function CreateToken() {
       setStatus('📤 Sending mint creation transaction...');
       const mintSignature = await sendTransaction(mintTx, connection);
       
-      // Wait for confirmation with better timeout handling
-      const confirmation = await connection.confirmTransaction({
-        signature: mintSignature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
-
-      if (confirmation.value.err) {
-        throw new Error('Mint creation failed');
-      }
+      // Use aggressive confirmation with shorter timeout
+      setStatus('⏳ Waiting for mint confirmation (30s timeout)...');
+      await confirmTransactionWithTimeout(mintSignature, connection, 30000);
 
       setStatus('✅ Mint account created successfully! Creating metadata...');
 
       // Step 6: Create metadata account with Metaplex
-      const newBlockhashResponse = await connection.getLatestBlockhash('finalized');
+      const newBlockhashResponse = await connection.getLatestBlockhash('processed');
       const newBlockhash = newBlockhashResponse.blockhash;
       const newLastValidBlockHeight = newBlockhashResponse.lastValidBlockHeight;
 
@@ -149,6 +185,16 @@ export default function CreateToken() {
         recentBlockhash: newBlockhash,
         feePayer: publicKey,
       });
+
+      // Add priority fee for metadata creation
+      metadataTx.add(
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: 50000
+        }),
+        ComputeBudgetProgram.setComputeUnitLimit({
+          units: 200000
+        })
+      );
 
       const metadataInstruction = MetaplexService.createMetadataInstruction(
         mintPublicKey,
@@ -164,16 +210,13 @@ export default function CreateToken() {
       setStatus('📤 Sending metadata creation transaction...');
       const metadataSignature = await sendTransaction(metadataTx, connection);
       
-      await connection.confirmTransaction({
-        signature: metadataSignature,
-        blockhash: newBlockhash,
-        lastValidBlockHeight: newLastValidBlockHeight,
-      }, 'confirmed');
+      setStatus('⏳ Waiting for metadata confirmation (30s timeout)...');
+      await confirmTransactionWithTimeout(metadataSignature, connection, 30000);
 
       setStatus('✅ Metadata created! Creating associated token account...');
 
       // Step 7: Create associated token account and mint tokens
-      const finalBlockhashResponse = await connection.getLatestBlockhash('finalized');
+      const finalBlockhashResponse = await connection.getLatestBlockhash('processed');
       const finalBlockhash = finalBlockhashResponse.blockhash;
       const finalLastValidBlockHeight = finalBlockhashResponse.lastValidBlockHeight;
 
@@ -181,6 +224,16 @@ export default function CreateToken() {
         recentBlockhash: finalBlockhash,
         feePayer: publicKey,
       });
+
+      // Add priority fee for final transaction
+      tokenTx.add(
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: 50000
+        }),
+        ComputeBudgetProgram.setComputeUnitLimit({
+          units: 200000
+        })
+      );
 
       const associatedTokenAccount = await getAssociatedTokenAddress(
         mintPublicKey,
@@ -211,11 +264,8 @@ export default function CreateToken() {
       setStatus('📤 Sending token minting transaction...');
       const mintToSignature = await sendTransaction(tokenTx, connection);
       
-      await connection.confirmTransaction({
-        signature: mintToSignature,
-        blockhash: finalBlockhash,
-        lastValidBlockHeight: finalLastValidBlockHeight,
-      }, 'confirmed');
+      setStatus('⏳ Waiting for final confirmation (30s timeout)...');
+      await confirmTransactionWithTimeout(mintToSignature, connection, 30000);
 
       // Step 8: Verify metadata account was created
       setStatus('🔍 Verifying metadata account...');
@@ -252,6 +302,8 @@ export default function CreateToken() {
 
 **Status**: ${metadataExists ? '✅ Full metadata created' : '⚠️ Basic token created (metadata may need time to propagate)'}
 
+**Network Note**: Due to Gorbagana testnet congestion, transactions may take time to appear in wallets. Check Trashscan.io for confirmation.
+
 Your token should now appear in wallets and explorers! 🗑️✨`);
 
       // Reset form
@@ -263,7 +315,25 @@ Your token should now appear in wallets and explorers! 🗑️✨`);
 
     } catch (error) {
       console.error('Token creation error:', error);
-      setStatus(`❌ **ERROR**: ${(error as Error).message}
+      
+      // Provide specific error messages for common issues
+      let errorMessage = (error as Error).message;
+      
+      if (errorMessage.includes('block height exceeded')) {
+        errorMessage = `Transaction expired due to network congestion. 
+        
+The transaction was sent successfully but took too long to confirm. 
+This is common on congested networks like Gorbagana testnet.
+
+**What to do:**
+1. Check Trashscan.io for transaction status
+2. Wait a few minutes for network to process
+3. Try again with a smaller transaction if needed
+
+**Transaction may still succeed despite the error!**`;
+      }
+      
+      setStatus(`❌ **ERROR**: ${errorMessage}
 
 Please try again or contact support if the issue persists.`);
     } finally {
@@ -374,6 +444,7 @@ Please try again or contact support if the issue persists.`);
         <p>Explorer: <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-trash-yellow hover:underline">trashscan.io</a></p>
         <p>Token Program: {TOKEN_PROGRAM_ID.toBase58()}</p>
         <p>Metaplex: {MetaplexService.METADATA_PROGRAM_ID.toBase58()}</p>
+        <p className="mt-2 text-yellow-400">⚠️ Network congestion may cause delays</p>
       </div>
     </div>
   );
