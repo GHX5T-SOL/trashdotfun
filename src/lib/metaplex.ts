@@ -1,6 +1,6 @@
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 import { 
-  createCreateMetadataAccountV3Instruction,
+  createMetadataAccountV3,
   PROGRAM_ID as METAPLEX_PROGRAM_ID,
   DataV2
 } from '@metaplex-foundation/mpl-token-metadata';
@@ -48,8 +48,8 @@ export class MetaplexService {
       uses: null,
     };
 
-    // Create the instruction
-    return createCreateMetadataAccountV3Instruction(
+    // Create the instruction using the correct function name
+    return createMetadataAccountV3(
       {
         metadata: metadataAccount,
         mint,
