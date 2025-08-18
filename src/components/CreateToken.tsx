@@ -233,13 +233,15 @@ export default function CreateToken() {
 • **Symbol**: ${symbol}
 • **Supply**: ${initialSupply}
 • **Decimals**: ${decimals}
-• **Mint Address**: ${mintPublicKey.toString()}
+• **Mint Address**: 
+  ${mintPublicKey.toString().slice(0, 20)}...${mintPublicKey.toString().slice(-20)}
 
-**Transaction Signatures:**
-• **Token Creation**: ${finalSignature}
+**Transaction Signature:**
+${finalSignature.slice(0, 20)}...${finalSignature.slice(-20)}
 
 **View Your Token:**
-• **Gorbagana Explorer**: https://trashcan.io/address/${mintPublicKey.toString()}
+• **Gorbagana Explorer**: 
+  https://trashcan.io/address/${mintPublicKey.toString()}
 • **Add to Wallet**: Use the mint address above
 
 **Note**: Metadata was skipped to avoid errors. Token will work without metadata.`);
@@ -380,7 +382,9 @@ Please try again or contact support if the issue persists.`);
       
       {status && (
         <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-          <p className="text-sm text-white whitespace-pre-line">{status}</p>
+          <div className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed">
+            {status}
+          </div>
         </div>
       )}
       
