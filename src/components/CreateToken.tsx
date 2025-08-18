@@ -162,85 +162,49 @@ export default function CreateToken() {
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
-      const createAssociatedTokenAccountIx = createAssociatedTokenAccountInstruction(
-        publicKey,
-        associatedTokenAccount,
-        publicKey,
-        mintPublicKey,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      );
+      // Step 6: Create associated token account
+      setStatus('🏦 Creating associated token account...');
+      const finalBlockhashResponse = await workingConnection.getLatestBlockhash('processed');
+      const finalBlockhash = finalBlockhashResponse.blockhash;
 
-      // Step 5: Mint initial tokens
-      setStatus('💰 Minting initial tokens...');
-      const mintToIx = createMintToInstruction(
-        mintPublicKey,
-        associatedTokenAccount,
-        publicKey,
-        Number(initialSupply),
-        [],
-        TOKEN_PROGRAM_ID
-      );
+      const finalTx = new Transaction();
+      finalTx.recentBlockhash = finalBlockhash;
+      finalTx.feePayer = publicKey;
 
-      // Step 6: Create and send transaction
-      setStatus('📡 Sending transaction...');
-      const transaction = new Transaction();
-      
       // Add compute budget instructions for better transaction processing
-      transaction.add(
+      finalTx.add(
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 })
       );
-      
-      // Add all instructions
-      transaction.add(
-        createMintAccountIx,
-        initializeMintIx,
-        createAssociatedTokenAccountIx,
-        mintToIx
+
+      // Add mint creation and initialization instructions
+      finalTx.add(createMintAccountIx, initializeMintIx);
+
+      // CRITICAL FIX: Create associated token account with correct owner
+      const createAssociatedTokenAccountIx = createAssociatedTokenAccountInstruction(
+        publicKey, // payer
+        associatedTokenAccount, // associated token account address
+        publicKey, // owner (this should be the wallet owner, not the mint)
+        mintPublicKey // mint
       );
 
-      // Get recent blockhash with retry mechanism
-      let blockhash = '';
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        try {
-          const { blockhash: recentBlockhash } = await workingConnection.getLatestBlockhash('processed');
-          blockhash = recentBlockhash;
-          break;
-        } catch (error) {
-          console.warn(`Blockhash attempt ${attempt} failed:`, error);
-          if (attempt === 5) throw new Error('Failed to get recent blockhash after 5 attempts');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
+      finalTx.add(createAssociatedTokenAccountIx);
 
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
+      // Add mint to instruction
+      const mintToIx = createMintToInstruction(
+        mintPublicKey,
+        associatedTokenAccount,
+        publicKey, // mint authority
+        Number(initialSupply) * Math.pow(10, decimals)
+      );
 
-      // Use aggressive confirmation with shorter timeout
-      setStatus('⏳ Waiting for mint confirmation (30s timeout)...');
-      
-      // CRITICAL: Include the mint keypair as a signer for the transaction to be valid
-      const mintSignature = await sendTransaction(transaction, workingConnection, {
-        signers: [mintKeypair], // This is the missing piece - the mint keypair must sign
-        skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
-        maxRetries: 3,
-        preflightCommitment: 'processed'
-      });
-      
-      await confirmTransactionWithTimeout(mintSignature, workingConnection, 30000);
-
-      setStatus('✅ Mint account created successfully! Creating metadata...');
+      finalTx.add(mintToIx);
 
       // Step 7: Create metadata account with Metaplex (with fallback)
       setStatus('📝 Creating metadata account...');
       let metadataCreated = false;
-      let metadataSignature = '';
       
       try {
-        const newBlockhashResponse = await workingConnection.getLatestBlockhash('processed');
-        const newBlockhash = newBlockhashResponse.blockhash;
-        
         const metadataInstruction = MetaplexService.createLatestMetadataInstruction(
           mintPublicKey,
           publicKey,
@@ -250,31 +214,9 @@ export default function CreateToken() {
           metadataUri
         );
 
-        const metadataTx = new Transaction({
-          recentBlockhash: newBlockhash,
-          feePayer: publicKey,
-        });
-
-        metadataTx.add(
-          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
-          ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
-          metadataInstruction
-        );
-
-        setStatus('📤 Sending metadata transaction...');
-        
-        // Ensure proper signers for metadata transaction
-        const metadataSignature = await sendTransaction(metadataTx, workingConnection, {
-          signers: [], // No additional signers needed for metadata
-          skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
-          maxRetries: 3,
-          preflightCommitment: 'processed'
-        });
-        
-        await confirmTransactionWithTimeout(metadataSignature, workingConnection, 30000);
-        
+        finalTx.add(metadataInstruction);
         metadataCreated = true;
-        setStatus('✅ Metadata created successfully!');
+        setStatus('✅ Metadata instruction added to transaction');
         
       } catch (error) {
         console.warn('Metadata creation failed:', error);
@@ -282,33 +224,18 @@ export default function CreateToken() {
         // Continue without metadata - token will still be created
       }
 
-      setStatus('🏦 Creating associated token account...');
-      const finalBlockhashResponse = await workingConnection.getLatestBlockhash('processed');
-      const finalBlockhash = finalBlockhashResponse.blockhash;
-
-      const finalTx = new Transaction({
-        recentBlockhash: finalBlockhash,
-        feePayer: publicKey,
-      });
-
-      finalTx.add(
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }),
-        createAssociatedTokenAccountIx,
-        mintToIx
-      );
-
-      setStatus('📤 Sending final transaction...');
+      // Step 8: Send the complete transaction
+      setStatus('📤 Sending complete transaction...');
       
-      // Ensure proper signers for final transaction
-      const mintToSignature = await sendTransaction(finalTx, workingConnection, {
-        signers: [], // No additional signers needed for final transaction
+      // Ensure proper signers for the complete transaction
+      const finalSignature = await sendTransaction(finalTx, workingConnection, {
+        signers: [mintKeypair], // Include mint keypair as signer
         skipPreflight: true, // Skip preflight to avoid wallet adapter RPC calls
         maxRetries: 3,
         preflightCommitment: 'processed'
       });
       
-      await confirmTransactionWithTimeout(mintToSignature, workingConnection, 30000);
+      await confirmTransactionWithTimeout(finalSignature, workingConnection, 30000);
 
       // Step 8: Verify metadata account was created (if attempted)
       if (metadataCreated) {
@@ -347,9 +274,9 @@ export default function CreateToken() {
 • **Metadata**: ${metadataUri}
 
 **Transaction Signatures:**
-• **Mint Creation**: ${mintSignature}
-• **Metadata**: ${metadataSignature}
-• **Token Minting**: ${mintToSignature}
+• **Mint Creation**: ${finalSignature}
+• **Metadata**: ${finalSignature}
+• **Token Minting**: ${finalSignature}
 
 **View Your Token:**
 • **Trashscan.io**: https://trashscan.io/token/${mintPublicKey.toBase58()}
