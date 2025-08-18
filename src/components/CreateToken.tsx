@@ -18,7 +18,7 @@ export default function CreateToken() {
   const [symbol, setSymbol] = useState('');
   const [supply, setSupply] = useState('');
   const [description, setDescription] = useState('');
-  // const [logo, setLogo] = useState<File | null>(null); // Will be implemented in next update
+  // const [logo, setLogo] = useState<File | null>(null); // Will be used with IPFS + Metaplex
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { connection } = useConnection();
@@ -43,8 +43,17 @@ export default function CreateToken() {
       const decimals = 9;
       const totalSupply = BigInt(Number(supply) * Math.pow(10, decimals));
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      // Get recent blockhash with retry mechanism
+      let blockhash: string;
+      let lastValidBlockHeight: number;
+      
+      try {
+        const blockhashResponse = await connection.getLatestBlockhash('finalized');
+        blockhash = blockhashResponse.blockhash;
+        lastValidBlockHeight = blockhashResponse.lastValidBlockHeight;
+      } catch {
+        throw new Error('Failed to get recent blockhash. Please try again.');
+      }
 
       // Step 1: Generate a new keypair for the mint account
       const mintKeypair = Keypair.generate();
@@ -82,12 +91,12 @@ export default function CreateToken() {
       setStatus('Sending mint creation transaction...');
       const mintSignature = await sendTransaction(mintTx, connection);
       
-      // Wait for confirmation
+      // Wait for confirmation with better timeout handling
       const confirmation = await connection.confirmTransaction({
         signature: mintSignature,
         blockhash,
         lastValidBlockHeight,
-      });
+      }, 'confirmed');
 
       if (confirmation.value.err) {
         throw new Error('Mint creation failed');
@@ -95,10 +104,14 @@ export default function CreateToken() {
 
       setStatus('Mint account created successfully! Creating associated token account...');
 
+      // Get fresh blockhash for next transaction
+      const newBlockhashResponse = await connection.getLatestBlockhash('finalized');
+      const newBlockhash = newBlockhashResponse.blockhash;
+      const newLastValidBlockHeight = newBlockhashResponse.lastValidBlockHeight;
+
       // Step 2: Create associated token account and mint tokens
-      const newBlockhash = await connection.getLatestBlockhash();
       const tokenTx = new Transaction({
-        recentBlockhash: newBlockhash.blockhash,
+        recentBlockhash: newBlockhash,
         feePayer: publicKey,
       });
 
@@ -131,10 +144,12 @@ export default function CreateToken() {
       setStatus('Sending token minting transaction...');
       const mintToSignature = await sendTransaction(tokenTx, connection);
       
+      // Wait for confirmation with better timeout handling
       await connection.confirmTransaction({
         signature: mintToSignature,
-        ...newBlockhash,
-      });
+        blockhash: newBlockhash,
+        lastValidBlockHeight: newLastValidBlockHeight,
+      }, 'confirmed');
 
       setStatus(`🎉 Token created successfully! 
       
@@ -148,16 +163,20 @@ Transactions:
 - Mint Creation: ${mintSignature}
 - Token Minting: ${mintToSignature}
 
-Note: Token metadata (name, symbol) is stored locally. For full metadata support, you can add it later using Metaplex.
+⚠️ IMPORTANT: Token metadata (name, symbol) is currently stored locally only.
+For proper display in wallets and explorers, you need to:
+1. Upload logo to IPFS
+2. Create Metaplex metadata account
+3. Link metadata to your token
 
-You can view your token on the Gorbagana Explorer!`);
+You can view your token on Trashscan.io: https://trashscan.io/token/${mintPublicKey.toBase58()}`);
 
       // Reset form
       setName('');
       setSymbol('');
       setSupply('');
       setDescription('');
-      // setLogo(null); // Will be implemented in next update
+      // setLogo(null); // Will be used with IPFS + Metaplex
 
     } catch (error) {
       console.error('Token creation error:', error);
@@ -236,7 +255,7 @@ You can view your token on the Gorbagana Explorer!`);
             id="logo"
             type="file"
             onChange={(e) => {
-              // Logo upload will be implemented in the next update
+              // Will be implemented with IPFS + Metaplex
               console.log('Logo selected:', e.target.files?.[0]?.name);
             }}
             className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-trash-yellow file:text-black hover:file:bg-yellow-600"
@@ -244,7 +263,7 @@ You can view your token on the Gorbagana Explorer!`);
             disabled={isLoading}
             aria-describedby="logo-help"
           />
-          <p id="logo-help" className="text-xs text-gray-400 mt-1">Logo upload will be implemented in the next update</p>
+          <p id="logo-help" className="text-xs text-gray-400 mt-1">Logo upload will be implemented with IPFS + Metaplex</p>
         </div>
         
         <button
@@ -268,7 +287,7 @@ You can view your token on the Gorbagana Explorer!`);
       
       <div className="mt-6 text-xs text-gray-400 text-center">
         <p>Powered by Gorbagana Chain</p>
-        <p>RPC: rpc.gorbagana.wtf</p>
+        <p>Explorer: <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-trash-yellow hover:underline">trashscan.io</a></p>
         <p>Token Program: {TOKEN_PROGRAM_ID.toBase58()}</p>
       </div>
     </div>
