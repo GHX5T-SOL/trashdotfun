@@ -13,10 +13,6 @@ export default function WalletContextProvider({ children }: { children: React.Re
     ? `${window.location.origin}/api/rpc`
     : 'http://localhost:3000/api/rpc';
   
-  // Debug logging
-  console.log('🔗 WalletContextProvider - Using Backend Proxy Endpoint:', endpoint);
-  console.log('🔗 This will route through: Frontend -> Backend -> Gorbagana RPC');
-  
   const wallets = useMemo(
     () => [
       new PhantomWalletAdapter(),
