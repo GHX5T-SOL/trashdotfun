@@ -12,13 +12,15 @@ import {
   createMintToInstruction,
   MINT_SIZE
 } from '@solana/spl-token';
+import { IPFSService } from '@/lib/ipfs';
+import { MetaplexService } from '@/lib/metaplex';
 
 export default function CreateToken() {
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
   const [supply, setSupply] = useState('');
   const [description, setDescription] = useState('');
-  // const [logo, setLogo] = useState<File | null>(null); // Will be used with IPFS + Metaplex
+  const [logo, setLogo] = useState<File | null>(null);
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { connection } = useConnection();
@@ -37,13 +39,46 @@ export default function CreateToken() {
     }
 
     setIsLoading(true);
-    setStatus('Creating token...');
+    setStatus('🚀 Starting token creation process...');
 
     try {
       const decimals = 9;
       const totalSupply = BigInt(Number(supply) * Math.pow(10, decimals));
 
-      // Get recent blockhash with retry mechanism
+      // Step 1: Upload logo to IPFS (if provided)
+      let logoUri = '';
+      if (logo) {
+        setStatus('📤 Uploading logo to IPFS...');
+        try {
+          const ipfsService = new IPFSService();
+          logoUri = await ipfsService.uploadImage(logo);
+          setStatus(`✅ Logo uploaded to IPFS: ${logoUri}`);
+        } catch (error) {
+          console.error('Logo upload failed:', error);
+          setStatus('⚠️ Logo upload failed, continuing without logo...');
+        }
+      }
+
+      // Step 2: Create metadata JSON and upload to IPFS
+      let metadataUri = '';
+      try {
+        setStatus('📝 Creating and uploading metadata to IPFS...');
+        const ipfsService = new IPFSService();
+        const metadata = MetaplexService.createMetadataJSON(
+          name,
+          symbol,
+          description || 'Token created on TrashdotFun',
+          logoUri || 'https://via.placeholder.com/400x400?text=No+Logo'
+        );
+        metadataUri = await ipfsService.uploadMetadata(metadata);
+        setStatus(`✅ Metadata uploaded to IPFS: ${metadataUri}`);
+      } catch (error) {
+        console.error('Metadata upload failed:', error);
+        throw new Error('Failed to upload metadata to IPFS');
+      }
+
+      // Step 3: Get recent blockhash with retry mechanism
+      setStatus('🔗 Getting recent blockhash...');
       let blockhash: string;
       let lastValidBlockHeight: number;
       
@@ -55,19 +90,20 @@ export default function CreateToken() {
         throw new Error('Failed to get recent blockhash. Please try again.');
       }
 
-      // Step 1: Generate a new keypair for the mint account
+      // Step 4: Generate mint account keypair
       const mintKeypair = Keypair.generate();
       const mintPublicKey = mintKeypair.publicKey;
       
       // Calculate rent for mint account
       const mintRent = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
       
+      // Step 5: Create and initialize mint account
+      setStatus('🏗️ Creating mint account...');
       const mintTx = new Transaction({
         recentBlockhash: blockhash,
         feePayer: publicKey,
       });
 
-      // Add instruction to create and initialize mint account
       mintTx.add(
         SystemProgram.createAccount({
           fromPubkey: publicKey,
@@ -88,7 +124,7 @@ export default function CreateToken() {
       // Include the mint keypair as a signer
       mintTx.partialSign(mintKeypair);
 
-      setStatus('Sending mint creation transaction...');
+      setStatus('📤 Sending mint creation transaction...');
       const mintSignature = await sendTransaction(mintTx, connection);
       
       // Wait for confirmation with better timeout handling
@@ -102,16 +138,47 @@ export default function CreateToken() {
         throw new Error('Mint creation failed');
       }
 
-      setStatus('Mint account created successfully! Creating associated token account...');
+      setStatus('✅ Mint account created successfully! Creating metadata...');
 
-      // Get fresh blockhash for next transaction
+      // Step 6: Create metadata account with Metaplex
       const newBlockhashResponse = await connection.getLatestBlockhash('finalized');
       const newBlockhash = newBlockhashResponse.blockhash;
       const newLastValidBlockHeight = newBlockhashResponse.lastValidBlockHeight;
 
-      // Step 2: Create associated token account and mint tokens
-      const tokenTx = new Transaction({
+      const metadataTx = new Transaction({
         recentBlockhash: newBlockhash,
+        feePayer: publicKey,
+      });
+
+      const metadataInstruction = MetaplexService.createMetadataInstruction(
+        mintPublicKey,
+        publicKey,
+        publicKey,
+        name,
+        symbol,
+        metadataUri
+      );
+
+      metadataTx.add(metadataInstruction);
+
+      setStatus('📤 Sending metadata creation transaction...');
+      const metadataSignature = await sendTransaction(metadataTx, connection);
+      
+      await connection.confirmTransaction({
+        signature: metadataSignature,
+        blockhash: newBlockhash,
+        lastValidBlockHeight: newLastValidBlockHeight,
+      }, 'confirmed');
+
+      setStatus('✅ Metadata created! Creating associated token account...');
+
+      // Step 7: Create associated token account and mint tokens
+      const finalBlockhashResponse = await connection.getLatestBlockhash('finalized');
+      const finalBlockhash = finalBlockhashResponse.blockhash;
+      const finalLastValidBlockHeight = finalBlockhashResponse.lastValidBlockHeight;
+
+      const tokenTx = new Transaction({
+        recentBlockhash: finalBlockhash,
         feePayer: publicKey,
       });
 
@@ -141,46 +208,64 @@ export default function CreateToken() {
 
       tokenTx.add(createATAInstruction, mintToInstruction);
 
-      setStatus('Sending token minting transaction...');
+      setStatus('📤 Sending token minting transaction...');
       const mintToSignature = await sendTransaction(tokenTx, connection);
       
-      // Wait for confirmation with better timeout handling
       await connection.confirmTransaction({
         signature: mintToSignature,
-        blockhash: newBlockhash,
-        lastValidBlockHeight: newLastValidBlockHeight,
+        blockhash: finalBlockhash,
+        lastValidBlockHeight: finalLastValidBlockHeight,
       }, 'confirmed');
 
-      setStatus(`🎉 Token created successfully! 
-      
-Mint Address: ${mintPublicKey.toBase58()}
-Token Name: ${name}
-Symbol: ${symbol}
-Total Supply: ${supply}
-Decimals: ${decimals}
+      // Step 8: Verify metadata account was created
+      setStatus('🔍 Verifying metadata account...');
+      const metadataExists = await MetaplexService.verifyMetadataAccount(
+        connection,
+        mintPublicKey
+      );
 
-Transactions:
-- Mint Creation: ${mintSignature}
-- Token Minting: ${mintToSignature}
+      if (!metadataExists) {
+        console.warn('Metadata account verification failed');
+      }
 
-⚠️ IMPORTANT: Token metadata (name, symbol) is currently stored locally only.
-For proper display in wallets and explorers, you need to:
-1. Upload logo to IPFS
-2. Create Metaplex metadata account
-3. Link metadata to your token
+      setStatus(`🎉 **TOKEN CREATED SUCCESSFULLY!** 🎉
 
-You can view your token on Trashscan.io: https://trashscan.io/token/${mintPublicKey.toBase58()}`);
+**Token Details:**
+• **Name**: ${name}
+• **Symbol**: ${symbol}
+• **Total Supply**: ${supply}
+• **Decimals**: ${decimals}
+• **Mint Address**: ${mintPublicKey.toBase58()}
+
+**IPFS Storage:**
+• **Logo**: ${logoUri || 'No logo uploaded'}
+• **Metadata**: ${metadataUri}
+
+**Transaction Signatures:**
+• **Mint Creation**: ${mintSignature}
+• **Metadata**: ${metadataSignature}
+• **Token Minting**: ${mintToSignature}
+
+**View Your Token:**
+• **Trashscan.io**: https://trashscan.io/token/${mintPublicKey.toBase58()}
+• **IPFS Gateway**: ${metadataUri ? `https://ipfs.io/ipfs/${metadataUri.replace('ipfs://', '')}` : 'N/A'}
+
+**Status**: ${metadataExists ? '✅ Full metadata created' : '⚠️ Basic token created (metadata may need time to propagate)'}
+
+Your token should now appear in wallets and explorers! 🗑️✨`);
 
       // Reset form
       setName('');
       setSymbol('');
       setSupply('');
       setDescription('');
-      // setLogo(null); // Will be used with IPFS + Metaplex
+      setLogo(null);
 
     } catch (error) {
       console.error('Token creation error:', error);
-      setStatus(`Error: ${(error as Error).message}`);
+      setStatus(`❌ **ERROR**: ${(error as Error).message}
+
+Please try again or contact support if the issue persists.`);
     } finally {
       setIsLoading(false);
     }
@@ -254,16 +339,15 @@ You can view your token on Trashscan.io: https://trashscan.io/token/${mintPublic
           <input
             id="logo"
             type="file"
-            onChange={(e) => {
-              // Will be implemented with IPFS + Metaplex
-              console.log('Logo selected:', e.target.files?.[0]?.name);
-            }}
+            onChange={(e) => setLogo(e.target.files?.[0] || null)}
             className="w-full p-3 rounded-lg bg-gray-800 text-white border border-gray-600 focus:border-trash-yellow focus:ring-2 focus:ring-trash-yellow focus:ring-opacity-50 transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-trash-yellow file:text-black hover:file:bg-yellow-600"
             accept="image/*"
             disabled={isLoading}
             aria-describedby="logo-help"
           />
-          <p id="logo-help" className="text-xs text-gray-400 mt-1">Logo upload will be implemented with IPFS + Metaplex</p>
+          <p id="logo-help" className="text-xs text-gray-400 mt-1">
+            Logo will be uploaded to IPFS and linked to your token metadata
+          </p>
         </div>
         
         <button
@@ -275,7 +359,7 @@ You can view your token on Trashscan.io: https://trashscan.io/token/${mintPublic
           }`}
           disabled={!publicKey || isLoading}
         >
-          {isLoading ? 'Creating Token...' : 'Create Token'}
+          {isLoading ? '🚀 Creating Token...' : '🚀 Create Token'}
         </button>
       </form>
       
@@ -289,6 +373,7 @@ You can view your token on Trashscan.io: https://trashscan.io/token/${mintPublic
         <p>Powered by Gorbagana Chain</p>
         <p>Explorer: <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-trash-yellow hover:underline">trashscan.io</a></p>
         <p>Token Program: {TOKEN_PROGRAM_ID.toBase58()}</p>
+        <p>Metaplex: {MetaplexService.METADATA_PROGRAM_ID.toBase58()}</p>
       </div>
     </div>
   );
