@@ -24,6 +24,10 @@ export default function CreateToken() {
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
 
+  // Debug logging for connection
+  console.log('🔗 CreateToken - Connection endpoint:', connection?.rpcEndpoint);
+  console.log('🔗 CreateToken - Public key:', publicKey?.toBase58());
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!publicKey) {
