@@ -77,13 +77,22 @@ export default function CreateToken() {
       return null;
     }
     
-    console.log('🔗 CreateToken - Using proxy connection to avoid CORS');
-    return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
-  }, [connection]);
+    const proxyUrl = `${window.location.origin}/api/rpc`;
+    console.log('🔗 CreateToken - Creating proxy connection to:', proxyUrl);
+    console.log('🔗 CreateToken - This ensures ALL RPC calls go through our proxy');
+    
+    return new Connection(proxyUrl, 'confirmed');
+  }, []);
 
   // Use proxy connection for all operations
   const workingConnection = useMemo(() => {
-    return proxyConnection || connection;
+    if (!proxyConnection) {
+      console.warn('🔗 CreateToken - No proxy connection available, falling back to default');
+      return connection;
+    }
+    
+    console.log('🔗 CreateToken - Using proxy connection for all operations');
+    return proxyConnection;
   }, [proxyConnection, connection]);
 
   // Custom transaction confirmation with timeout
@@ -128,6 +137,37 @@ export default function CreateToken() {
       return false;
     }
   };
+
+  // Custom sendTransaction wrapper that ensures ALL RPC calls go through our proxy
+  const sendTransactionWithProxy = useCallback(async (transaction: Transaction, options?: any) => {
+    if (!sendTransaction) {
+      throw new Error('Wallet does not support sending transactions');
+    }
+
+    console.log('🔗 CreateToken - Using custom sendTransaction wrapper to ensure proxy usage');
+    
+    try {
+      // Send the transaction through our proxy
+      const signature = await sendTransaction(transaction, workingConnection, options);
+      
+      console.log('🔗 CreateToken - Transaction sent, signature:', signature);
+      
+      // Manually confirm the transaction using our proxy connection
+      console.log('🔗 CreateToken - Confirming transaction through proxy...');
+      const confirmation = await workingConnection.confirmTransaction(signature, 'confirmed');
+      
+      if (confirmation.value.err) {
+        throw new Error(`Transaction failed: ${confirmation.value.err}`);
+      }
+      
+      console.log('🔗 CreateToken - Transaction confirmed successfully through proxy');
+      return signature;
+      
+    } catch (error) {
+      console.error('🔗 CreateToken - Error in custom sendTransaction wrapper:', error);
+      throw error;
+    }
+  }, [sendTransaction, workingConnection]);
 
   const handleCreateToken = useCallback(async () => {
     // Prevent token creation during SSR
@@ -323,10 +363,13 @@ export default function CreateToken() {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
         maxRetries: 3,
+        // Disable automatic confirmation to prevent wallet from making direct RPC calls
+        commitment: 'confirmed'
       });
       
       // Wait for confirmation using our proxy connection
       setStatus('Waiting for transaction confirmation...');
+      console.log('🔗 CreateToken - Transaction sent, confirming through proxy...');
       const confirmation = await confirmTransactionWithTimeout(finalSignature, 60000);
 
       if (confirmation) {
