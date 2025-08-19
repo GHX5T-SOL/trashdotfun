@@ -318,9 +318,8 @@ export default function CreateToken() {
       
       // Send the transaction using the wallet's sendTransaction method
       // This will prompt the user to sign the transaction
-      // Note: Don't pass workingConnection here to avoid CORS issues
-      // The wallet will use its own connection, but we'll use our proxy for confirmation
-      const finalSignature = await sendTransaction(finalTx, {
+      // Use our proxy connection to maintain the golden rule: RPC server → my server → frontend
+      const finalSignature = await sendTransaction(finalTx, workingConnection, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
         maxRetries: 3,
@@ -381,7 +380,7 @@ Please check the console for more details.`;
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, workingConnection, name, symbol, initialSupply, decimals, logoFile, telegram, twitter, website, description, sendTransaction]);
+  }, [publicKey, workingConnection, name, symbol, initialSupply, decimals, logoFile, telegram, twitter, website, description, sendTransaction, connection]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

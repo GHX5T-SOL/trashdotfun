@@ -101,13 +101,26 @@ export class IPFSService {
     try {
       // Check if proof is a valid base64url string
       if (!proof || typeof proof !== 'string') {
+        console.log('IPFS Service: UCAN proof validation failed - empty or not string');
         return false;
       }
+      
+      // Debug: Log the first and last few characters of the proof
+      console.log('IPFS Service: UCAN proof validation - length:', proof.length);
+      console.log('IPFS Service: UCAN proof validation - first 20 chars:', proof.substring(0, 20));
+      console.log('IPFS Service: UCAN proof validation - last 20 chars:', proof.substring(proof.length - 20));
       
       // Basic format validation - should be base64url encoded
       const base64urlRegex = /^[A-Za-z0-9_-]+$/;
       if (!base64urlRegex.test(proof)) {
         console.warn('IPFS Service: UCAN proof contains invalid characters');
+        // Find the first invalid character
+        for (let i = 0; i < proof.length; i++) {
+          if (!base64urlRegex.test(proof[i])) {
+            console.warn(`IPFS Service: Invalid character at position ${i}: '${proof[i]}' (code: ${proof.charCodeAt(i)})`);
+            break;
+          }
+        }
         return false;
       }
       
@@ -117,6 +130,7 @@ export class IPFSService {
         return false;
       }
       
+      console.log('IPFS Service: UCAN proof validation passed');
       return true;
     } catch (error) {
       console.warn('IPFS Service: Error validating UCAN proof format:', error);
