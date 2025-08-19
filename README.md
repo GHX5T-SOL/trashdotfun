@@ -5,6 +5,9 @@
 
 Welcome to **TrashdotFun**, the trashiest token launchpad on the Gorbagana Chain! Built with a cartoony, Oscar the Grouch-inspired theme, this platform makes creating meme coins as fun as diving into a garbage can.
 
+## 🌐 **Live Demo**
+**🚀 Deployed at**: [https://trashdotfun.netlify.app/](https://trashdotfun.netlify.app/)
+
 ## ✨ Features
 
 ### 🎨 **Cartoony Garbage Theme**
@@ -35,17 +38,17 @@ Welcome to **TrashdotFun**, the trashiest token launchpad on the Gorbagana Chain
 
 ## 🛠️ Technical Stack
 
-- **Frontend**: Next.js 14 with TypeScript
+- **Frontend**: Next.js 15 with TypeScript
 - **Styling**: Tailwind CSS with custom animations
 - **Blockchain**: Solana Web3.js and SPL Token
 - **Metadata**: Metaplex with IPFS storage
 - **Network**: Gorbagana Chain (GOR testnet)
-- **Deployment**: Vercel-ready configuration
+- **Deployment**: Netlify with automatic deployments
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js 18+ 
+- Node.js 20+ (required for Solana dependencies)
 - Yarn or npm
 - Solana wallet (Phantom, Solflare)
 
@@ -53,7 +56,7 @@ Welcome to **TrashdotFun**, the trashiest token launchpad on the Gorbagana Chain
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/trashdotfun.git
+   git clone https://github.com/GHX5T-SOL/trashdotfun.git
    cd trashdotfun
    ```
 
@@ -134,15 +137,22 @@ The platform includes a CORS proxy at `/api/rpc` to avoid cross-origin issues wh
 
 ## 🚀 Deployment
 
-### Vercel (Recommended)
-1. Connect your GitHub repository to Vercel
-2. Deploy automatically on push to main branch
-3. Environment variables will be automatically configured
+### Netlify (Current)
+1. **Automatic Deployment**: Connected to GitHub with auto-deploy on push
+2. **Environment Variables**: Configured in Netlify dashboard
+3. **Build Command**: `yarn build`
+4. **Publish Directory**: `.next`
 
 ### Manual Deployment
 ```bash
 yarn build
 yarn start
+```
+
+### Local Development
+```bash
+yarn dev
+# Open http://localhost:3000
 ```
 
 ## 🤝 Contributing
@@ -160,6 +170,7 @@ We welcome contributions! Please feel free to submit issues and pull requests.
 - **Telegram**: [@trashdotfun](https://t.me/trashdotfun)
 - **X (Twitter)**: [@trashdotfun_](https://x.com/trashdotfun_)
 - **Website**: [trashdotfun.com](https://trashdotfun.com)
+- **Live Demo**: [https://trashdotfun.netlify.app/](https://trashdotfun.netlify.app/)
 
 ## 📄 License
 
