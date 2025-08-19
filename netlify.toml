@@ -4,6 +4,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  NODE_OPTIONS = "--max-old-space-size=4096"
+  NEXT_TELEMETRY_DISABLED = "1"
+  NODE_ENV = "production"
   NEXT_PUBLIC_RPC_ENDPOINT = "https://rpc.gorbagana.wtf/"
   NEXT_PUBLIC_EXPLORER_URL = "https://trashscan.io"
   NEXT_PUBLIC_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
@@ -11,20 +14,40 @@
   NEXT_PUBLIC_METAPLEX_PROGRAM_ID = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
   NEXT_PUBLIC_IPFS_GATEWAY = "https://ipfs.io"
   NEXT_PUBLIC_DEBUG_IPFS = "true"
+  NEXT_PUBLIC_STORACHA_DID_KEY = ""
+  NEXT_PUBLIC_STORACHA_SIGNING_KEY = ""
+  NEXT_PUBLIC_STORACHA_SPACE_DID = ""
+  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
 
-# Headers for static assets
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@solana/web3.js", "@solana/spl-token", "@storacha/client"]
+
 [[headers]]
   for = "/_next/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+  values = {Cache-Control = "public, max-age=31536000, immutable"}
 
 [[headers]]
   for = "/_next/image/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+  values = {Cache-Control = "public, max-age=31536000, immutable"}
 
-# Redirects for Next.js
+[plugins]
+  - inputs = {}
+    package = "@netlify/plugin-nextjs"
+
 [[redirects]]
   from = "/*"
-  to = "/index.html"
   status = 200
+  to = "/index.html"
+
+[[redirects]]
+  from = "/_next/image"
+  query = {q = ":quality", url = ":url", w = ":width"}
+  status = 200
+  to = "/.netlify/images?url=:url&w=:width&q=:quality"
+
+[[redirects]]
+  from = "/_ipx/*"
+  query = {q = ":quality", url = ":url", w = ":width"}
+  status = 200
+  to = "/.netlify/images?url=:url&w=:width&q=:quality"

@@ -1,0 +1,40 @@
+# Exclude unnecessary files from Netlify function bundle
+node_modules/@solana/web3.js
+node_modules/@solana/spl-token
+node_modules/@storacha/client
+node_modules/@project-serum/anchor
+node_modules/@pinata/sdk
+node_modules/arweave
+node_modules/ipfs-http-client
+node_modules/ws
+node_modules/pino-pretty
+node_modules/fastestsmallesttextencoderdecoder
+
+# Exclude development files
+*.log
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+coverage/
+.nyc_output/
+
+# Exclude build artifacts that aren't needed
+.next/cache/
+.next/standalone/
+.next/export/
+
+# Exclude source maps in production
+*.map
+
+# Exclude TypeScript source files
+*.ts
+*.tsx
+!next-env.d.ts
+
+# Exclude configuration files that aren't needed at runtime
+eslint.config.mjs
+tailwind.config.ts
+postcss.config.mjs
+tsconfig.json
+next.config.js
