@@ -7,7 +7,8 @@ import {
   Transaction, 
   SystemProgram,
   ComputeBudgetProgram,
-  Connection
+  Connection,
+  PublicKey
 } from '@solana/web3.js';
 import { 
   createInitializeMintInstruction,
@@ -91,6 +92,26 @@ export default function CreateToken() {
       }
     }
     return false;
+  };
+
+  // Check if metadata account exists
+  const checkMetadataAccountExists = async (mint: PublicKey): Promise<boolean> => {
+    try {
+      const [metadataAccount] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('metadata'),
+          new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s').toBuffer(),
+          mint.toBuffer(),
+        ],
+        new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
+      );
+      
+      const accountInfo = await workingConnection.getAccountInfo(metadataAccount);
+      return accountInfo !== null;
+    } catch (error) {
+      console.error('Error checking metadata account existence:', error);
+      return false;
+    }
   };
 
   const handleCreateToken = useCallback(async () => {
@@ -265,14 +286,18 @@ export default function CreateToken() {
 
       // Sign and send transaction
       setStatus('Signing and sending transaction...');
-      const finalSignature = await sendTransaction(finalTx, workingConnection, {
-        signers: [mintKeypair],
+      
+      // First sign the transaction with the mint keypair
+      finalTx.sign(mintKeypair);
+      
+      // Send the transaction using our proxy connection
+      const finalSignature = await workingConnection.sendTransaction(finalTx, [mintKeypair], {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
         maxRetries: 3,
       });
-
-      // Wait for confirmation
+      
+      // Wait for confirmation using our proxy connection
       setStatus('Waiting for transaction confirmation...');
       const confirmation = await confirmTransactionWithTimeout(workingConnection, finalSignature, 60000);
 
@@ -281,7 +306,7 @@ export default function CreateToken() {
         let metadataCreated = false;
         if (metadataUri) {
           try {
-            metadataCreated = await MetaplexService.metadataAccountExists(workingConnection, mintPublicKey);
+            metadataCreated = await checkMetadataAccountExists(mintPublicKey);
             console.log('Metadata account exists:', metadataCreated);
           } catch (error) {
             console.error('Error checking metadata:', error);

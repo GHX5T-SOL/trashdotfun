@@ -17,7 +17,9 @@ export default function WalletContextProvider({ children }: { children: React.Re
       console.log('🔗 This follows Gorbagana dev recommendation: RPC server -> your server -> your frontend');
       return `${window.location.origin}/api/rpc`;
     }
-    return 'https://rpc.gorbagana.wtf/';
+    // For SSR, still use proxy but with a placeholder
+    console.log('🔗 WalletContextProvider - SSR fallback to proxy endpoint');
+    return '/api/rpc';
   }, []);
 
   const wallets = useMemo(
