@@ -8,9 +8,10 @@ export class IPFSService {
   private client: any = null; // TODO: Replace with proper type when Storacha types are available
   private isInitialized: boolean = false;
   private useMockService: boolean = false; // Try real service first
+  private initializationPromise: Promise<void> | null = null;
 
   constructor() {
-    this.initializeClient();
+    this.initializationPromise = this.initializeClient();
   }
 
   /**
@@ -79,6 +80,15 @@ export class IPFSService {
   }
 
   /**
+   * Wait for initialization to complete
+   */
+  private async waitForInitialization(): Promise<void> {
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+    }
+  }
+
+  /**
    * Validate UCAN proof format
    */
   private isValidUCANProof(proof: string): boolean {
@@ -112,6 +122,8 @@ export class IPFSService {
    * Upload image to IPFS using Storacha Network
    */
   async uploadImage(file: File): Promise<string> {
+    await this.waitForInitialization();
+    
     try {
       if (this.useMockService || !this.isInitialized || !this.client) {
         console.log('IPFS Service: Using mock IPFS service for image:', file.name);
@@ -133,9 +145,14 @@ export class IPFSService {
     } catch (error) {
       console.error('IPFS Service: Image upload failed:', error);
       
-      // Fallback to mock service if Storacha fails
-      console.warn('IPFS Service: Falling back to mock service for image upload');
-      return this.mockIPFSUpload(file);
+      // Only fallback to mock if this is a real error, not just initialization
+      if (this.isInitialized && this.client) {
+        console.warn('IPFS Service: Storacha upload failed, falling back to mock service');
+        return this.mockIPFSUpload(file);
+      } else {
+        console.log('IPFS Service: Using mock service (Storacha not available)');
+        return this.mockIPFSUpload(file);
+      }
     }
   }
 
@@ -150,6 +167,8 @@ export class IPFSService {
    * Upload metadata to IPFS
    */
   async uploadMetadata(metadata: Record<string, unknown>): Promise<string> {
+    await this.waitForInitialization();
+    
     try {
       if (this.useMockService || !this.isInitialized || !this.client) {
         console.log('IPFS Service: Using mock IPFS service for metadata');
@@ -172,9 +191,14 @@ export class IPFSService {
     } catch (error) {
       console.error('IPFS Service: Metadata upload failed:', error);
       
-      // Fallback to mock service if Storacha fails
-      console.warn('IPFS Service: Falling back to mock service for metadata upload');
-      return this.mockMetadataUpload();
+      // Only fallback to mock if this is a real error, not just initialization
+      if (this.isInitialized && this.client) {
+        console.warn('IPFS Service: Storacha upload failed, falling back to mock service');
+        return this.mockMetadataUpload();
+      } else {
+        console.log('IPFS Service: Using mock service (Storacha not available)');
+        return this.mockMetadataUpload();
+      }
     }
   }
 
@@ -280,6 +304,8 @@ See: https://docs.storacha.network for detailed instructions.`;
    * Test the connection to Storacha
    */
   async testConnection(): Promise<boolean> {
+    await this.waitForInitialization();
+    
     try {
       if (this.useMockService || !this.isInitialized || !this.client) {
         return false;
