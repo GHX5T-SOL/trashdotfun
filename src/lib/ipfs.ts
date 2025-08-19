@@ -58,9 +58,11 @@ export class IPFSService {
       // Additional normalization: remove any other non-base64url characters
       const base64urlRegex = /^[A-Za-z0-9_-]+$/;
       if (!base64urlRegex.test(normalizedProof)) {
-        console.log('IPFS Service: Additional normalization needed for client initialization');
+        console.log('IPFS Service: Additional normalization needed, cleaning invalid characters');
+        console.log('IPFS Service: Characters before cleaning:', normalizedProof.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
         normalizedProof = normalizedProof.replace(/[^A-Za-z0-9_-]/g, '');
-        console.log('IPFS Service: Final normalized proof for client:', normalizedProof.length);
+        console.log('IPFS Service: Characters after cleaning:', normalizedProof.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
+        console.log('IPFS Service: Final normalized proof length:', normalizedProof.length);
       }
       
       // For now, use a basic client configuration to get uploads working

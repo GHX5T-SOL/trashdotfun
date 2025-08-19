@@ -37,7 +37,7 @@ export default function CreateToken() {
   }
 
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signTransaction } = useWallet();
   
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
@@ -209,6 +209,56 @@ export default function CreateToken() {
       throw error;
     }
   }, [sendTransaction, workingConnection]);
+
+  // ULTIMATE BYPASS: Raw transaction signing to completely avoid wallet adapter RPC calls
+  const sendTransactionUltimate = useCallback(async (transaction: Transaction, options?: any) => {
+    if (!publicKey || !signTransaction) {
+      throw new Error('Wallet not connected or signing not supported');
+    }
+
+    console.log('🔗 CreateToken - ULTIMATE BYPASS: Raw transaction signing');
+    console.log('🔗 CreateToken - This completely bypasses the wallet adapter');
+    console.log('🔗 CreateToken - ZERO chance of CORS bypass');
+    
+    try {
+      // Step 1: Sign the transaction manually
+      console.log('🔗 CreateToken - Step 1: Manual transaction signing...');
+      const signedTransaction = await signTransaction(transaction);
+      console.log('🔗 CreateToken - Transaction signed successfully');
+      
+      // Step 2: Send raw transaction through our proxy ONLY
+      console.log('🔗 CreateToken - Step 2: Sending raw transaction through proxy...');
+      setStatus('Sending signed transaction through secure proxy...');
+      
+      const signature = await workingConnection.sendRawTransaction(
+        signedTransaction.serialize(),
+        {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+          maxRetries: 3,
+        }
+      );
+      
+      console.log('🔗 CreateToken - Raw transaction sent, signature:', signature);
+      
+      // Step 3: Confirm using ONLY our proxy connection
+      console.log('🔗 CreateToken - Step 3: Confirming through proxy ONLY...');
+      setStatus('Confirming transaction through secure proxy...');
+      
+      const confirmation = await workingConnection.confirmTransaction(signature, 'confirmed');
+      
+      if (confirmation.value.err) {
+        throw new Error(`Transaction failed: ${confirmation.value.err}`);
+      }
+      
+      console.log('🔗 CreateToken - ULTIMATE SUCCESS: Transaction confirmed through proxy only!');
+      return signature;
+      
+    } catch (error) {
+      console.error('🔗 CreateToken - ULTIMATE ERROR:', error);
+      throw error;
+    }
+  }, [publicKey, signTransaction, workingConnection]);
 
   const handleCreateToken = useCallback(async () => {
     // Prevent token creation during SSR
@@ -397,10 +447,10 @@ export default function CreateToken() {
         throw new Error('Wallet does not support sending transactions');
       }
       
-      // Send the transaction using our NUCLEAR approach to prevent CORS bypass
-      // This completely bypasses the wallet adapter's confirmation logic
-      console.log('🔗 CreateToken - Using NUCLEAR approach for transaction...');
-      const finalSignature = await sendTransactionNuclear(finalTx);
+      // Send the transaction using our ULTIMATE BYPASS approach
+      // This completely bypasses the wallet adapter and uses raw transaction signing
+      console.log('🔗 CreateToken - Using ULTIMATE BYPASS for transaction...');
+      const finalSignature = await sendTransactionUltimate(finalTx);
       
       // Wait for confirmation using our proxy connection
       setStatus('Waiting for transaction confirmation...');
