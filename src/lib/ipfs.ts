@@ -5,15 +5,14 @@ import * as ed25519 from '@ucanto/principal/ed25519';
 
 // IPFS service using Storacha Network with UCANs
 export class IPFSService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any = null; // TODO: Replace with proper type when Storacha types are available
   private isInitialized: boolean = false;
-  private useMockService: boolean = true; // Default to mock service
-  
+  private useMockService: boolean = false; // Try real service first
+
   constructor() {
     this.initializeClient();
   }
-  
+
   /**
    * Initialize the Storacha client with UCANs
    */
@@ -29,14 +28,14 @@ export class IPFSService {
         this.useMockService = true;
         return;
       }
-      
+
       // Validate UCAN proof format before parsing
       if (!this.isValidUCANProof(ucanProof)) {
         console.warn('IPFS Service: UCAN proof format appears invalid, using mock service');
         this.useMockService = true;
         return;
       }
-      
+
       console.log('IPFS Service: Initializing Storacha client with UCANs...');
       
       // For now, use a basic client configuration to get uploads working
@@ -78,7 +77,7 @@ export class IPFSService {
       }
     }
   }
-  
+
   /**
    * Validate UCAN proof format
    */
@@ -108,7 +107,7 @@ export class IPFSService {
       return false;
     }
   }
-  
+
   /**
    * Upload image to IPFS using Storacha Network
    */
@@ -139,7 +138,14 @@ export class IPFSService {
       return this.mockIPFSUpload(file);
     }
   }
-  
+
+  /**
+   * Upload file to IPFS (alias for uploadImage for compatibility)
+   */
+  async uploadFile(file: File): Promise<string> {
+    return this.uploadImage(file);
+  }
+
   /**
    * Upload metadata to IPFS
    */
@@ -171,7 +177,7 @@ export class IPFSService {
       return this.mockMetadataUpload();
     }
   }
-  
+
   /**
    * Mock IPFS upload for fallback
    */
@@ -185,7 +191,7 @@ export class IPFSService {
     const mockHash = `QmMock${file.name.replace(/[^a-zA-Z0-9]/g, '')}${Date.now()}`;
     return `ipfs://${mockHash}`;
   }
-  
+
   /**
    * Mock metadata upload for fallback
    */
@@ -199,7 +205,7 @@ export class IPFSService {
     const mockHash = `QmMockMetadata${Date.now()}`;
     return `ipfs://${mockHash}`;
   }
-  
+
   /**
    * Get IPFS gateway URL for display
    */
@@ -222,14 +228,14 @@ export class IPFSService {
     // Return the first gateway (ipfs.io is most reliable)
     return gateways[0];
   }
-  
+
   /**
    * Check if real IPFS is available
    */
   isRealIPFSAvailable(): boolean {
     return this.isInitialized && this.client !== null && !this.useMockService;
   }
-  
+
   /**
    * Get service status for debugging
    */
@@ -248,7 +254,7 @@ export class IPFSService {
     
     return 'Service unavailable';
   }
-  
+
   /**
    * Get setup instructions for Storacha Network
    */
@@ -269,7 +275,7 @@ Run: npm run setup-storacha for automated setup help.
 
 See: https://docs.storacha.network for detailed instructions.`;
   }
-  
+
   /**
    * Test the connection to Storacha
    */

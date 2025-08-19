@@ -59,8 +59,12 @@ export class MetaplexService {
     // Instruction index: 0 (CreateMetadataAccount)
     const instructionIndex = 0;
     
-    // Create the data buffer
-    const data = Buffer.alloc(1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 0 + 4 + 0);
+    // Calculate total buffer size correctly
+    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 4 (collection) + 4 (uses)
+    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 4 + 4;
+    
+    // Create the data buffer with correct size
+    const data = Buffer.alloc(totalSize);
     let offset = 0;
     
     // Instruction index

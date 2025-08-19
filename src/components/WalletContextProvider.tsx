@@ -9,6 +9,11 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adap
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export default function WalletContextProvider({ children }: { children: React.ReactNode }) {
+  // Prevent SSR rendering of wallet components
+  if (typeof window === 'undefined') {
+    return <>{children}</>;
+  }
+
   // Use the backend proxy to avoid CORS issues (as recommended by Gorbagana devs)
   // RPC server -> your server -> your frontend
   const endpoint = useMemo(() => {
@@ -32,7 +37,7 @@ export default function WalletContextProvider({ children }: { children: React.Re
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect={false}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>
