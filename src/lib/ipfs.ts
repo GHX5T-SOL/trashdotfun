@@ -8,6 +8,7 @@ export class IPFSService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any = null; // TODO: Replace with proper type when Storacha types are available
   private isInitialized: boolean = false;
+  private useMockService: boolean = true; // Default to mock service
   
   constructor() {
     this.initializeClient();
@@ -19,9 +20,20 @@ export class IPFSService {
   private async initializeClient() {
     try {
       const ucanProof = process.env.NEXT_PUBLIC_STORACHA_UCAN_PROOF;
+      const didKey = process.env.NEXT_PUBLIC_STORACHA_DID_KEY;
+      const signingKey = process.env.NEXT_PUBLIC_STORACHA_SIGNING_KEY;
       
-      if (!ucanProof) {
-        console.log('IPFS Service: Storacha UCAN proof not configured, using mock service');
+      // Check if all required Storacha environment variables are present
+      if (!ucanProof || !didKey || !signingKey) {
+        console.log('IPFS Service: Storacha environment variables not configured, using mock service');
+        this.useMockService = true;
+        return;
+      }
+      
+      // Validate UCAN proof format before parsing
+      if (!this.isValidUCANProof(ucanProof)) {
+        console.warn('IPFS Service: UCAN proof format appears invalid, using mock service');
+        this.useMockService = true;
         return;
       }
       
@@ -40,17 +52,23 @@ export class IPFSService {
         
         this.client = client;
         this.isInitialized = true;
+        this.useMockService = false;
         
         console.log('IPFS Service: Storacha client initialized successfully');
         console.log('IPFS Service: Current space:', space.did());
       } catch (proofError) {
         console.error('IPFS Service: Failed to parse UCAN proof:', proofError);
-        throw proofError;
+        console.log('IPFS Service: Falling back to mock service due to UCAN parsing error');
+        this.useMockService = true;
+        
+        // Don't throw error, just use mock service
+        return;
       }
       
     } catch (error) {
       console.error('IPFS Service: Failed to initialize Storacha client:', error);
       console.log('IPFS Service: Falling back to mock service');
+      this.useMockService = true;
       
       // Add helpful debugging info
       if (error instanceof Error) {
@@ -62,12 +80,42 @@ export class IPFSService {
   }
   
   /**
+   * Validate UCAN proof format
+   */
+  private isValidUCANProof(proof: string): boolean {
+    try {
+      // Check if proof is a valid base64url string
+      if (!proof || typeof proof !== 'string') {
+        return false;
+      }
+      
+      // Basic format validation - should be base64url encoded
+      const base64urlRegex = /^[A-Za-z0-9_-]+$/;
+      if (!base64urlRegex.test(proof)) {
+        console.warn('IPFS Service: UCAN proof contains invalid characters');
+        return false;
+      }
+      
+      // Check length - UCAN proofs are typically long but not extremely long
+      if (proof.length < 100 || proof.length > 10000) {
+        console.warn('IPFS Service: UCAN proof length seems unusual:', proof.length);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.warn('IPFS Service: Error validating UCAN proof format:', error);
+      return false;
+    }
+  }
+  
+  /**
    * Upload image to IPFS using Storacha Network
    */
   async uploadImage(file: File): Promise<string> {
     try {
-      if (!this.isInitialized || !this.client) {
-        console.warn('IPFS Service: Storacha client not initialized, using mock service');
+      if (this.useMockService || !this.isInitialized || !this.client) {
+        console.log('IPFS Service: Using mock IPFS service for image:', file.name);
         return this.mockIPFSUpload(file);
       }
       
@@ -97,8 +145,8 @@ export class IPFSService {
    */
   async uploadMetadata(metadata: Record<string, unknown>): Promise<string> {
     try {
-      if (!this.isInitialized || !this.client) {
-        console.warn('IPFS Service: Storacha client not initialized, using mock service');
+      if (this.useMockService || !this.isInitialized || !this.client) {
+        console.log('IPFS Service: Using mock IPFS service for metadata');
         return this.mockMetadataUpload();
       }
       
@@ -179,13 +227,17 @@ export class IPFSService {
    * Check if real IPFS is available
    */
   isRealIPFSAvailable(): boolean {
-    return this.isInitialized && this.client !== null;
+    return this.isInitialized && this.client !== null && !this.useMockService;
   }
   
   /**
    * Get service status for debugging
    */
   getServiceStatus(): string {
+    if (this.useMockService) {
+      return 'Using mock IPFS service (Storacha not configured or UCAN issues)';
+    }
+    
     if (!this.isInitialized) {
       return 'Storacha client not initialized';
     }
@@ -210,9 +262,10 @@ export class IPFSService {
 5. Set current space: storacha space use [SPACE_NAME]
 6. Add to .env.local:
    NEXT_PUBLIC_STORACHA_DID_KEY=did:key:z6Mk...
+   NEXT_PUBLIC_STORACHA_SIGNING_KEY=MgCaUx+h3xaFF3WGq3yJ8Osmz42Ann91DhWD7y1IGr30i8O0BM48tCEewKUDMzPc/dZyQiioq6aZ06QILfJBtWu2xzGg=
    NEXT_PUBLIC_STORACHA_UCAN_PROOF=mAYIEAP8OEaJlcm9vdHOA...
 
-Run: node scripts/setup-storacha.js for automated setup help.
+Run: npm run setup-storacha for automated setup help.
 
 See: https://docs.storacha.network for detailed instructions.`;
   }
@@ -222,7 +275,7 @@ See: https://docs.storacha.network for detailed instructions.`;
    */
   async testConnection(): Promise<boolean> {
     try {
-      if (!this.isInitialized || !this.client) {
+      if (this.useMockService || !this.isInitialized || !this.client) {
         return false;
       }
       
