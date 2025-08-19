@@ -1,0 +1,33 @@
+[build]
+  command = "yarn build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Exclude problematic environment variables that cause build failures
+[context.production.environment]
+  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
+
+[context.deploy-preview.environment]
+  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
+
+[context.branch-deploy.environment]
+  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
+
+# Headers for static assets
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/_next/image/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Redirects for Next.js
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

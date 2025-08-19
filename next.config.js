@@ -7,13 +7,15 @@ const nextConfig = {
     // Disable TypeScript checking during build to allow deployment
     ignoreBuildErrors: true,
   },
-  // Vercel-specific optimizations for Next.js 15
+  // Netlify-specific optimizations for Next.js 15
   experimental: {
     // Disable problematic features that cause issues
     optimizePackageImports: [],
     webVitalsAttribution: [],
+    // Disable outputFileTracing to avoid export-detail.json issues
+    outputFileTracing: false,
   },
-  // Minimal config for Vercel compatibility
+  // Netlify compatibility settings
   trailingSlash: false,
   // Disable static export to avoid export-detail.json issues
   output: undefined,
@@ -23,6 +25,8 @@ const nextConfig = {
   },
   // Ensure proper build output
   distDir: '.next',
+  // Disable standalone output for Netlify
+  outputStandalone: false,
 };
 
 module.exports = nextConfig;
