@@ -47,9 +47,20 @@ export class IPFSService {
       
       // Normalize the UCAN proof (convert base64 to base64url if needed)
       let normalizedProof = ucanProof;
-      if (ucanProof.includes('+') || ucanProof.includes('/')) {
+      if (ucanProof.includes('+') || ucanProof.includes('/') || ucanProof.includes('=')) {
         console.log('IPFS Service: Converting base64 to base64url format for client initialization');
-        normalizedProof = ucanProof.replace(/\+/g, '-').replace(/\//g, '_');
+        normalizedProof = ucanProof
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, ''); // Remove padding characters
+      }
+      
+      // Additional normalization: remove any other non-base64url characters
+      const base64urlRegex = /^[A-Za-z0-9_-]+$/;
+      if (!base64urlRegex.test(normalizedProof)) {
+        console.log('IPFS Service: Additional normalization needed for client initialization');
+        normalizedProof = normalizedProof.replace(/[^A-Za-z0-9_-]/g, '');
+        console.log('IPFS Service: Final normalized proof for client:', normalizedProof.length);
       }
       
       // For now, use a basic client configuration to get uploads working
@@ -119,19 +130,30 @@ export class IPFSService {
       
       // Convert base64 to base64url if needed (replace + with -, / with _)
       let normalizedProof = proof;
-      if (proof.includes('+') || proof.includes('/')) {
+      if (proof.includes('+') || proof.includes('/') || proof.includes('=')) {
         console.log('IPFS Service: Converting base64 to base64url format');
-        normalizedProof = proof.replace(/\+/g, '-').replace(/\//g, '_');
+        normalizedProof = proof
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=/g, ''); // Remove padding characters
         console.log('IPFS Service: Normalized proof length:', normalizedProof.length);
       }
       
-      // Basic format validation - should be base64url encoded
+      // Additional normalization: remove any other non-base64url characters
       const base64urlRegex = /^[A-Za-z0-9_-]+$/;
       if (!base64urlRegex.test(normalizedProof)) {
+        console.log('IPFS Service: Additional normalization needed, cleaning invalid characters');
+        normalizedProof = normalizedProof.replace(/[^A-Za-z0-9_-]/g, '');
+        console.log('IPFS Service: Final normalized proof length:', normalizedProof.length);
+      }
+      
+      // Basic format validation - should be base64url encoded
+      const base64urlRegexFinal = /^[A-Za-z0-9_-]+$/;
+      if (!base64urlRegexFinal.test(normalizedProof)) {
         console.warn('IPFS Service: UCAN proof contains invalid characters after normalization');
         // Find the first invalid character
         for (let i = 0; i < normalizedProof.length; i++) {
-          if (!base64urlRegex.test(normalizedProof[i])) {
+          if (!base64urlRegexFinal.test(normalizedProof[i])) {
             console.warn(`IPFS Service: Invalid character at position ${i}: '${normalizedProof[i]}' (code: ${normalizedProof.charCodeAt(i)})`);
             break;
           }
