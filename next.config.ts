@@ -12,13 +12,11 @@ const nextConfig: NextConfig = {
   // Vercel-specific optimizations for Next.js 15
   experimental: {
     // Disable problematic features
-    optimizePackageImports: false,
-    webVitalsAttribution: false,
+    optimizePackageImports: [],
+    webVitalsAttribution: [],
+    // Add nftTracing as suggested by Vercel docs
+    nftTracing: true,
   },
-  // Ensure proper static generation
-  generateStaticParams: false,
-  // Disable static export
-  output: undefined,
   // Minimal config for Vercel compatibility
   trailingSlash: false,
 }
