@@ -12,11 +12,11 @@ const nextConfig = {
     // Disable problematic features
     optimizePackageImports: [],
     webVitalsAttribution: [],
-    // Disable file tracing to avoid export-detail.json issues
-    outputFileTracing: false,
   },
   // Minimal config for Vercel compatibility
   trailingSlash: false,
+  // Disable static export to avoid export-detail.json issues
+  output: undefined,
 };
 
 module.exports = nextConfig;
