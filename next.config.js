@@ -12,8 +12,6 @@ const nextConfig = {
     // Disable problematic features that cause issues
     optimizePackageImports: [],
     webVitalsAttribution: [],
-    // Disable outputFileTracing to avoid export-detail.json issues
-    outputFileTracing: false,
   },
   // Netlify compatibility settings
   trailingSlash: false,
@@ -25,8 +23,6 @@ const nextConfig = {
   },
   // Ensure proper build output
   distDir: '.next',
-  // Disable standalone output for Netlify
-  outputStandalone: false,
 };
 
 module.exports = nextConfig;
