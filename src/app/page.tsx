@@ -17,13 +17,10 @@ export default function Home() {
           {/* Main Oscar Image */}
           <div className="mb-8 relative">
             <div className="relative inline-block">
-              <Image
-                src="/oscar.png"
+              <img
+                src="/oscar-hero.svg"
                 alt="Oscar the Grouch"
-                width={300}
-                height={300}
-                className="rounded-full border-4 border-trash-yellow shadow-2xl animate-trash-bounce"
-                style={{ width: 'auto', height: 'auto' }}
+                className="h-64 w-64 rounded-full border-4 border-trash-yellow shadow-2xl animate-trash-bounce"
               />
               {/* Floating trash elements */}
               <div className="absolute -top-4 -right-4 w-8 h-8 bg-red-500 rounded-full animate-ping"></div>
@@ -96,12 +93,10 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <div className="flex items-center space-x-3">
-              <Image
-                src="/oscar.png"
+              <img
+                src="/oscar.svg"
                 alt="Oscar the Grouch"
-                width={40}
-                height={40}
-                className="rounded-full border-2 border-trash-yellow"
+                className="h-10 w-10 rounded-full border-2 border-trash-yellow"
               />
               <div>
                 <h3 className="text-lg font-bold text-trash-yellow">TrashdotFun</h3>

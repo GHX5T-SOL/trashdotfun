@@ -45,14 +45,21 @@ export class IPFSService {
 
       console.log('IPFS Service: Initializing Storacha client with UCANs...');
       
+      // Normalize the UCAN proof (convert base64 to base64url if needed)
+      let normalizedProof = ucanProof;
+      if (ucanProof.includes('+') || ucanProof.includes('/')) {
+        console.log('IPFS Service: Converting base64 to base64url format for client initialization');
+        normalizedProof = ucanProof.replace(/\+/g, '-').replace(/\//g, '_');
+      }
+      
       // For now, use a basic client configuration to get uploads working
       // The UCAN proof should contain the necessary authorization
       const store = new StoreMemory();
       const client = await create({ store });
       
       try {
-        // Add the space using the UCAN proof
-        const proof = await parseProof(ucanProof);
+        // Add the space using the normalized UCAN proof
+        const proof = await parseProof(normalizedProof);
         const space = await client.addSpace(proof);
         await client.setCurrentSpace(space.did());
         
@@ -63,7 +70,7 @@ export class IPFSService {
         console.log('IPFS Service: Storacha client initialized successfully');
         console.log('IPFS Service: Current space:', space.did());
       } catch (proofError) {
-        console.error('IPFS Service: Failed to parse UCAN proof:', proofError);
+        console.error('IPFS Service: Failed to parse normalized UCAN proof:', proofError);
         console.log('IPFS Service: Falling back to mock service due to UCAN parsing error');
         this.useMockService = true;
         
@@ -110,14 +117,22 @@ export class IPFSService {
       console.log('IPFS Service: UCAN proof validation - first 20 chars:', proof.substring(0, 20));
       console.log('IPFS Service: UCAN proof validation - last 20 chars:', proof.substring(proof.length - 20));
       
+      // Convert base64 to base64url if needed (replace + with -, / with _)
+      let normalizedProof = proof;
+      if (proof.includes('+') || proof.includes('/')) {
+        console.log('IPFS Service: Converting base64 to base64url format');
+        normalizedProof = proof.replace(/\+/g, '-').replace(/\//g, '_');
+        console.log('IPFS Service: Normalized proof length:', normalizedProof.length);
+      }
+      
       // Basic format validation - should be base64url encoded
       const base64urlRegex = /^[A-Za-z0-9_-]+$/;
-      if (!base64urlRegex.test(proof)) {
-        console.warn('IPFS Service: UCAN proof contains invalid characters');
+      if (!base64urlRegex.test(normalizedProof)) {
+        console.warn('IPFS Service: UCAN proof contains invalid characters after normalization');
         // Find the first invalid character
-        for (let i = 0; i < proof.length; i++) {
-          if (!base64urlRegex.test(proof[i])) {
-            console.warn(`IPFS Service: Invalid character at position ${i}: '${proof[i]}' (code: ${proof.charCodeAt(i)})`);
+        for (let i = 0; i < normalizedProof.length; i++) {
+          if (!base64urlRegex.test(normalizedProof[i])) {
+            console.warn(`IPFS Service: Invalid character at position ${i}: '${normalizedProof[i]}' (code: ${normalizedProof.charCodeAt(i)})`);
             break;
           }
         }
@@ -125,8 +140,8 @@ export class IPFSService {
       }
       
       // Check length - UCAN proofs are typically long but not extremely long
-      if (proof.length < 100 || proof.length > 10000) {
-        console.warn('IPFS Service: UCAN proof length seems unusual:', proof.length);
+      if (normalizedProof.length < 100 || normalizedProof.length > 10000) {
+        console.warn('IPFS Service: UCAN proof length seems unusual:', normalizedProof.length);
         return false;
       }
       

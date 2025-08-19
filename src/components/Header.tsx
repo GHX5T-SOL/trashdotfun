@@ -16,12 +16,10 @@ export default function Header() {
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center space-x-3 hover:scale-105 transition-transform duration-200">
               <div className="relative">
-                <Image
-                  src="/oscar.png"
-                  alt="Oscar the Grouch"
-                  width={50}
-                  height={50}
-                  className="rounded-full border-2 border-trash-yellow shadow-lg"
+                <img 
+                  src="/oscar.svg" 
+                  alt="TrashdotFun Logo" 
+                  className="h-12 w-12"
                 />
                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
               </div>
