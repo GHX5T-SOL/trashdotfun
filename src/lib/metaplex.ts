@@ -57,13 +57,13 @@ export class MetaplexService {
    * @returns Buffer containing the instruction data
    */
   private static createMetadataInstructionData(name: string, symbol: string, uri: string): Buffer {
-    // Metaplex v1 CreateMetadataAccountV3 instruction
-    // Instruction index: 33 (CreateMetadataAccountV3)
-    const instructionIndex = 33;
+    // Metaplex v1 CreateMetadataAccount instruction (basic version)
+    // Instruction index: 0 (CreateMetadataAccount) - more compatible with Gorbagana Chain
+    const instructionIndex = 0;
     
-    // Calculate total buffer size correctly for CreateMetadataAccountV3
-    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 1 (collection) + 1 (uses) + 1 (collection details) + 1 (uses details)
-    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 1 + 1 + 1 + 1;
+    // Calculate total buffer size correctly for CreateMetadataAccount
+    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 4 (collection) + 4 (uses)
+    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 4 + 4;
     
     // Create the data buffer with correct size
     const data = Buffer.alloc(totalSize);
@@ -99,21 +99,13 @@ export class MetaplexService {
     data.writeUInt16LE(0, offset);
     offset += 2;
     
-    // Collection (0 = None)
-    data.writeUInt8(0, offset);
-    offset += 1;
+    // Collection (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
     
-    // Uses (0 = None)
-    data.writeUInt8(0, offset);
-    offset += 1;
-    
-    // Collection details (0 = None)
-    data.writeUInt8(0, offset);
-    offset += 1;
-    
-    // Uses details (0 = None)
-    data.writeUInt8(0, offset);
-    offset += 1;
+    // Uses (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
     
     return data;
   }

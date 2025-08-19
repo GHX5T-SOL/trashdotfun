@@ -318,7 +318,9 @@ export default function CreateToken() {
       
       // Send the transaction using the wallet's sendTransaction method
       // This will prompt the user to sign the transaction
-      const finalSignature = await sendTransaction(finalTx, workingConnection, {
+      // Note: Don't pass workingConnection here to avoid CORS issues
+      // The wallet will use its own connection, but we'll use our proxy for confirmation
+      const finalSignature = await sendTransaction(finalTx, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
         maxRetries: 3,
