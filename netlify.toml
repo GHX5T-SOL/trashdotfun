@@ -31,9 +31,9 @@
   for = "/_next/image/*"
   values = {Cache-Control = "public, max-age=31536000, immutable"}
 
-[plugins]
-  - inputs = {}
-    package = "@netlify/plugin-nextjs"
+[[plugins]]
+  inputs = {}
+  package = "@netlify/plugin-nextjs"
 
 [[redirects]]
   from = "/*"
