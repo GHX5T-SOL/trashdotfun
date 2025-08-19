@@ -1,11 +1,9 @@
 import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
-import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
-import { mplTokenMetadata } from '@metaplex-foundation/mpl-token-metadata';
-import { createMetadataAccountV3 } from '@metaplex-foundation/mpl-token-metadata';
 
 export class MetaplexService {
   private static readonly METAPLEX_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-  private static readonly GORBAGANA_RPC = 'https://rpc.gorbagana.wtf/';
+  
+
 
   /**
    * Create metadata instruction for a token mint using Umi framework
@@ -35,58 +33,10 @@ export class MetaplexService {
       this.METAPLEX_PROGRAM_ID
     );
 
-    // Create Umi instance using our backend proxy to avoid CORS issues
-    const umi = createUmi('/api/rpc').use(mplTokenMetadata());
-
-    // Create metadata data structure
-    const data = {
-      name,
-      symbol,
-      uri,
-      sellerFeeBasisPoints: 0, // No royalties for basic tokens
-      creators: null,
-      collection: null,
-      uses: null,
-    };
-
     try {
-      // Create the metadata account using Umi
-      const transactionBuilder = createMetadataAccountV3(umi, {
-        metadata: metadataAccount,
-        mint,
-        mintAuthority,
-        payer,
-        updateAuthority: mintAuthority,
-        data,
-        isMutable: true,
-        collectionDetails: null,
-      });
-
-      // Extract the instruction from the transaction builder
-      const instructions = transactionBuilder.getInstructions();
-      
-      if (!instructions || instructions.length === 0) {
-        throw new Error('No instructions returned from Umi transaction builder');
-      }
-
-      const instruction = instructions[0];
-
-      // Check if the instruction has the expected structure
-      if (!instruction.accounts || !Array.isArray(instruction.accounts)) {
-        throw new Error(`Umi instruction accounts is not an array: ${typeof instruction.accounts}`);
-      }
-
-      // Convert Umi instruction to Solana TransactionInstruction
-      return new TransactionInstruction({
-        keys: instruction.accounts.map(account => ({
-          pubkey: account.pubkey,
-          isSigner: account.isSigner,
-          isWritable: account.isWritable,
-        })),
-        programId: instruction.programId,
-        data: instruction.data,
-      });
-
+      // Use fallback method for better compatibility with Gorbagana Chain
+      console.log('Using fallback metadata instruction creation for Gorbagana Chain compatibility');
+      throw new Error('Using fallback implementation');
     } catch (error) {
       console.error('Error creating Umi metadata instruction:', error);
       

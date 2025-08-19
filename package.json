@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup-storacha": "node scripts/setup-storacha.js"
   },
   "dependencies": {
     "@metaplex-foundation/js": "^0.20.1",
@@ -20,6 +21,7 @@
     "@solana/wallet-adapter-react-ui": "^0.9.39",
     "@solana/wallet-adapter-wallets": "^0.19.37",
     "@solana/web3.js": "^1.98.4",
+    "@storacha/client": "^1.7.6",
     "bs58": "^6.0.0",
     "ipfs-http-client": "^60.0.1",
     "next": "^15.3.4",

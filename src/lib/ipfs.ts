@@ -1,58 +1,93 @@
-// IPFS service using Storacha Network (formerly Web3.Storage)
+import { create } from '@storacha/client';
+import { StoreMemory } from '@storacha/client/stores/memory';
+import { parse as parseProof } from '@storacha/client/proof';
+import * as ed25519 from '@ucanto/principal/ed25519';
+
+// IPFS service using Storacha Network with UCANs
 export class IPFSService {
-  private storachaDidKey: string | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private client: any = null; // TODO: Replace with proper type when Storacha types are available
+  private isInitialized: boolean = false;
   
   constructor() {
-    // Get Storacha DID key from environment
-    this.storachaDidKey = process.env.NEXT_PUBLIC_WEB3_STORAGE_TOKEN || null;
-    
-    // Log token status for debugging
-    if (this.storachaDidKey) {
-      console.log('IPFS Service: Storacha Network DID key configured');
-    } else {
-      console.log('IPFS Service: No Storacha DID key, using mock service');
+    this.initializeClient();
+  }
+  
+  /**
+   * Initialize the Storacha client with UCANs
+   */
+  private async initializeClient() {
+    try {
+      const ucanProof = process.env.NEXT_PUBLIC_STORACHA_UCAN_PROOF;
+      
+      if (!ucanProof) {
+        console.log('IPFS Service: Storacha UCAN proof not configured, using mock service');
+        return;
+      }
+      
+      console.log('IPFS Service: Initializing Storacha client with UCANs...');
+      
+      // For now, use a basic client configuration to get uploads working
+      // The UCAN proof should contain the necessary authorization
+      const store = new StoreMemory();
+      const client = await create({ store });
+      
+      try {
+        // Add the space using the UCAN proof
+        const proof = await parseProof(ucanProof);
+        const space = await client.addSpace(proof);
+        await client.setCurrentSpace(space.did());
+        
+        this.client = client;
+        this.isInitialized = true;
+        
+        console.log('IPFS Service: Storacha client initialized successfully');
+        console.log('IPFS Service: Current space:', space.did());
+      } catch (proofError) {
+        console.error('IPFS Service: Failed to parse UCAN proof:', proofError);
+        throw proofError;
+      }
+      
+    } catch (error) {
+      console.error('IPFS Service: Failed to initialize Storacha client:', error);
+      console.log('IPFS Service: Falling back to mock service');
+      
+      // Add helpful debugging info
+      if (error instanceof Error) {
+        if (error.message.includes('base64url')) {
+          console.log('IPFS Service: UCAN proof appears to have encoding issues');
+        }
+      }
     }
   }
   
   /**
    * Upload image to IPFS using Storacha Network
-   * Note: Storacha uses UCANs instead of JWT tokens
    */
   async uploadImage(file: File): Promise<string> {
     try {
-      if (!this.storachaDidKey) {
-        throw new Error('Storacha Network DID key not configured');
+      if (!this.isInitialized || !this.client) {
+        console.warn('IPFS Service: Storacha client not initialized, using mock service');
+        return this.mockIPFSUpload(file);
       }
       
-      console.log('Uploading image to IPFS via Storacha Network:', file.name);
+      console.log('IPFS Service: Uploading image to IPFS via Storacha Network:', file.name);
       
-      // For now, we'll use a mock upload since Storacha requires UCAN setup
-      // TODO: Implement proper Storacha Network integration with UCANs
-      console.warn('Storacha Network integration requires UCAN setup - using mock service for now');
+      // Convert File to ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
       
-      // Fallback to mock service until we implement UCAN integration
-      return this.mockIPFSUpload(file);
+      // Upload to Storacha
+      const cid = await this.client.uploadBlob(uint8Array);
       
-      /* 
-      // Future Storacha Network implementation:
-      // This will require the @storacha/client package and UCAN setup
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch('https://api.storacha.network/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.storachaDidKey}`,
-        },
-        body: formData,
-      });
-      */
+      console.log('IPFS Service: Image uploaded successfully, CID:', cid);
+      return `ipfs://${cid}`;
       
     } catch (error) {
-      console.error('IPFS upload failed:', error);
+      console.error('IPFS Service: Image upload failed:', error);
       
       // Fallback to mock service if Storacha fails
-      console.warn('Falling back to mock IPFS service');
+      console.warn('IPFS Service: Falling back to mock service for image upload');
       return this.mockIPFSUpload(file);
     }
   }
@@ -62,23 +97,29 @@ export class IPFSService {
    */
   async uploadMetadata(metadata: Record<string, unknown>): Promise<string> {
     try {
-      if (!this.storachaDidKey) {
-        throw new Error('Storacha Network DID key not configured');
+      if (!this.isInitialized || !this.client) {
+        console.warn('IPFS Service: Storacha client not initialized, using mock service');
+        return this.mockMetadataUpload();
       }
       
-      console.log('Uploading metadata to IPFS via Storacha Network');
+      console.log('IPFS Service: Uploading metadata to IPFS via Storacha Network');
       
-      // For now, we'll use a mock upload since Storacha requires UCAN setup
-      console.warn('Storacha Network integration requires UCAN setup - using mock service for now');
+      // Convert metadata to JSON string, then to bytes
+      const jsonString = JSON.stringify(metadata, null, 2);
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(jsonString);
       
-      // Fallback to mock service until we implement UCAN integration
-      return this.mockMetadataUpload();
+      // Upload to Storacha
+      const cid = await this.client.uploadBlob(uint8Array);
+      
+      console.log('IPFS Service: Metadata uploaded successfully, CID:', cid);
+      return `ipfs://${cid}`;
       
     } catch (error) {
-      console.error('IPFS metadata upload failed:', error);
+      console.error('IPFS Service: Metadata upload failed:', error);
       
       // Fallback to mock service if Storacha fails
-      console.warn('Falling back to mock IPFS service for metadata');
+      console.warn('IPFS Service: Falling back to mock service for metadata upload');
       return this.mockMetadataUpload();
     }
   }
@@ -87,7 +128,7 @@ export class IPFSService {
    * Mock IPFS upload for fallback
    */
   private async mockIPFSUpload(file: File): Promise<string> {
-    console.log('Using mock IPFS service for image:', file.name);
+    console.log('IPFS Service: Using mock IPFS service for image:', file.name);
     
     // Simulate upload delay
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -101,7 +142,7 @@ export class IPFSService {
    * Mock metadata upload for fallback
    */
   private async mockMetadataUpload(): Promise<string> {
-    console.log('Using mock IPFS service for metadata');
+    console.log('IPFS Service: Using mock IPFS service for metadata');
     
     // Simulate upload delay
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -126,7 +167,8 @@ export class IPFSService {
       `https://ipfs.io/ipfs/${hash}`,
       `https://gateway.pinata.cloud/ipfs/${hash}`,
       `https://cloudflare-ipfs.com/ipfs/${hash}`,
-      `https://dweb.link/ipfs/${hash}`
+      `https://dweb.link/ipfs/${hash}`,
+      `https://storacha.network/ipfs/${hash}` // Storacha's own gateway
     ];
     
     // Return the first gateway (ipfs.io is most reliable)
@@ -137,28 +179,63 @@ export class IPFSService {
    * Check if real IPFS is available
    */
   isRealIPFSAvailable(): boolean {
-    return this.storachaDidKey !== null;
+    return this.isInitialized && this.client !== null;
   }
   
   /**
-   * Get token status for debugging
+   * Get service status for debugging
    */
-  getTokenStatus(): string {
-    if (!this.storachaDidKey) {
-      return 'No DID key configured';
+  getServiceStatus(): string {
+    if (!this.isInitialized) {
+      return 'Storacha client not initialized';
     }
     
-    if (this.storachaDidKey.startsWith('did:key:')) {
-      return 'DID key configured for Storacha Network (UCAN-based)';
+    if (this.client) {
+      return 'Storacha client ready for real IPFS uploads';
     }
     
-    return 'Unknown key format';
+    return 'Service unavailable';
   }
   
   /**
    * Get setup instructions for Storacha Network
    */
   getSetupInstructions(): string {
-    return 'To enable real IPFS uploads, you need to set up UCANs with Storacha Network. See: https://docs.storacha.network';
+    return `To enable real IPFS uploads, you need to set up UCANs with Storacha Network:
+
+1. Install Storacha CLI: npm install -g @storacha/cli
+2. Create a space: storacha space create
+3. Generate a key: storacha key create --json
+4. Create UCAN delegation: storacha delegation create [DID] -c space/blob/add -c space/index/add -c filecoin/offer -c upload/add --base64
+5. Set current space: storacha space use [SPACE_NAME]
+6. Add to .env.local:
+   NEXT_PUBLIC_STORACHA_DID_KEY=did:key:z6Mk...
+   NEXT_PUBLIC_STORACHA_UCAN_PROOF=mAYIEAP8OEaJlcm9vdHOA...
+
+Run: node scripts/setup-storacha.js for automated setup help.
+
+See: https://docs.storacha.network for detailed instructions.`;
+  }
+  
+  /**
+   * Test the connection to Storacha
+   */
+  async testConnection(): Promise<boolean> {
+    try {
+      if (!this.isInitialized || !this.client) {
+        return false;
+      }
+      
+      // Try to upload a small test blob
+      const testData = new TextEncoder().encode('test');
+      const cid = await this.client.uploadBlob(testData);
+      
+      console.log('IPFS Service: Connection test successful, test CID:', cid);
+      return true;
+      
+    } catch (error) {
+      console.error('IPFS Service: Connection test failed:', error);
+      return false;
+    }
   }
 }

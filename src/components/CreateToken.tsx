@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { 
   Keypair, 
   Transaction, 
@@ -20,6 +19,7 @@ import {
 } from '@solana/spl-token';
 import { MetaplexService } from '../lib/metaplex';
 import { IPFSService } from '../lib/ipfs';
+import LoadingSpinner from './LoadingSpinner';
 
 export default function CreateToken() {
   const { connection } = useConnection();
@@ -30,8 +30,31 @@ export default function CreateToken() {
   const [initialSupply, setInitialSupply] = useState<number>(1000000);
   const [decimals, setDecimals] = useState<number>(9);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [telegram, setTelegram] = useState('');
+  const [twitter, setTwitter] = useState('');
+  const [website, setWebsite] = useState('');
+  const [description, setDescription] = useState('');
   const [status, setStatus] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [createdToken, setCreatedToken] = useState<{
+    name: string;
+    symbol: string;
+    initialSupply: number;
+    decimals: number;
+    mintAddress: string;
+    metadataUri?: string;
+    telegram?: string;
+    twitter?: string;
+    website?: string;
+    description?: string;
+    metadataCreated?: boolean;
+    transactionSignature?: string;
+    social?: {
+      telegram?: string;
+      twitter?: string;
+      website?: string;
+    };
+  } | null>(null);
 
   // Use proxy connection to avoid CORS issues (as recommended by Gorbagana devs)
   const proxyConnection = useMemo(() => {
@@ -83,6 +106,7 @@ export default function CreateToken() {
 
     setStatus('Creating token...');
     setIsLoading(true);
+    setCreatedToken(null);
 
     try {
       // Create mint keypair
@@ -113,7 +137,7 @@ export default function CreateToken() {
 
       // Get associated token account address
       const associatedTokenAddress = await getAssociatedTokenAddress(
-        mintPublicKey,
+        mintKeypair.publicKey,
         publicKey,
         false,
         TOKEN_PROGRAM_ID
@@ -152,26 +176,31 @@ export default function CreateToken() {
         }
       }
 
-      // Create metadata JSON
+      // Create metadata JSON with social links
       let metadataUri = '';
-      if (logoUri) {
+      if (logoUri || telegram || twitter || website || description) {
         setStatus('Creating metadata...');
         try {
           const metadata = {
             name,
             symbol,
-            description: `Token created on TrashdotFun - ${name} (${symbol})`,
+            description: description || `Token created on TrashdotFun - ${name} (${symbol})`,
             image: logoUri,
             attributes: [],
             properties: {
-              files: [
+              files: logoUri ? [
                 {
                   type: "image/png",
                   uri: logoUri
                 }
-              ],
+              ] : [],
               category: "image",
-              creators: []
+              creators: [],
+              social: {
+                telegram: telegram || undefined,
+                twitter: twitter || undefined,
+                website: website || undefined
+              }
             }
           };
           
@@ -259,28 +288,24 @@ export default function CreateToken() {
           }
         }
 
-        // Show success message
-        setStatus(`🎉 Token "${name}" (${symbol}) created successfully!
+        // Store created token info
+        const tokenInfo = {
+          name,
+          symbol,
+          initialSupply,
+          decimals,
+          mintAddress: mintPublicKey.toString(),
+          transactionSignature: finalSignature,
+          metadataCreated,
+          social: {
+            telegram,
+            twitter,
+            website
+          }
+        };
+        setCreatedToken(tokenInfo);
 
-**Token Details:**
-• **Name**: ${name}
-• **Symbol**: ${symbol}
-• **Supply**: ${initialSupply}
-• **Decimals**: ${decimals}
-• **Mint Address**: 
-  ${mintPublicKey.toString().slice(0, 20)}...${mintPublicKey.toString().slice(-20)}
-
-**Transaction Signature:**
-${finalSignature.slice(0, 20)}...${finalSignature.slice(-20)}
-
-**View Your Token:**
-• **Gorbagana Explorer**: 
-  https://trashcan.io/address/${mintPublicKey.toString()}
-• **Add to Wallet**: Use the mint address above
-
-**Metadata Status**: ${metadataCreated ? '✅ Created successfully' : '❌ Not created'}
-
-**Note**: ${metadataCreated ? 'Token has full metadata support!' : 'Token created without metadata but will still function.'}`);
+        setStatus('🎉 Token created successfully! Check the details below.');
       } else {
         setStatus('❌ Transaction failed to confirm within timeout. Please check the explorer.');
       }
@@ -302,7 +327,7 @@ Please check the console for more details.`;
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey, workingConnection, name, symbol, initialSupply, decimals, logoFile, sendTransaction]);
+  }, [publicKey, workingConnection, name, symbol, initialSupply, decimals, logoFile, telegram, twitter, website, description, sendTransaction]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -313,87 +338,161 @@ Please check the console for more details.`;
     }
   };
 
+  const resetForm = () => {
+    setName('');
+    setSymbol('');
+    setInitialSupply(1000000);
+    setDecimals(9);
+    setLogoFile(null);
+    setTelegram('');
+    setTwitter('');
+    setWebsite('');
+    setDescription('');
+    setStatus('');
+    setCreatedToken(null);
+  };
+
+  if (!publicKey) {
+    return (
+      <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600 text-center">
+        <div className="text-6xl mb-4">🔒</div>
+        <h2 className="text-2xl font-bold text-trash-yellow mb-4">Wallet Not Connected</h2>
+        <p className="text-green-200 mb-6">Please connect your wallet to start creating tokens</p>
+        <div className="text-4xl animate-bounce">👇</div>
+        <p className="text-green-300 text-sm mt-2">Use the wallet button in the header above</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <div className="max-w-2xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-green-400 mb-4">🗑️ TrashdotFun</h1>
-          <p className="text-xl text-gray-300">Create Your Trash Token on Gorbagana Chain</p>
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <WalletMultiButton className="w-full mb-6" />
-          
-          {!publicKey && (
-            <p className="text-center text-gray-400">
-              Connect your wallet to start creating tokens
-            </p>
-          )}
-        </div>
-
-        {publicKey && (
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h2 className="text-2xl font-bold mb-6 text-green-400">Create New Token</h2>
+    <div className="space-y-8">
+      {/* Token Creation Form */}
+      <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600">
+        <h2 className="text-3xl font-bold text-trash-yellow mb-6 text-center">🚀 Create New Token</h2>
+        
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Basic Token Info */}
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold text-trash-yellow mb-4">📝 Basic Information</h3>
             
-            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Token Name
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Token Name *
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
                   placeholder="e.g., Oscar's Garbage Coin"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Token Symbol
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Token Symbol *
                 </label>
                 <input
                   type="text"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
                   placeholder="e.g., OGC"
                   maxLength={6}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Initial Supply
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Initial Supply *
                 </label>
                 <input
                   type="number"
                   value={initialSupply}
                   onChange={(e) => setInitialSupply(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
                   placeholder="1000000"
                   min="1"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Decimals
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Decimals *
                 </label>
                 <input
                   type="number"
                   value={decimals}
                   onChange={(e) => setDecimals(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
                   placeholder="9"
                   min="0"
                   max="9"
                 />
               </div>
+          </div>
+
+          {/* Social Media & Additional Info */}
+          <div className="space-y-4">
+            <h3 className="text-xl font-bold text-trash-yellow mb-4">🌐 Social & Media</h3>
 
               <div>
-                <label htmlFor="logo-file" className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200 resize-none"
+                placeholder="Describe your token..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Telegram Link
+              </label>
+              <input
+                type="url"
+                value={telegram}
+                onChange={(e) => setTelegram(e.target.value)}
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
+                placeholder="https://t.me/yourgroup"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                X (Twitter) Link
+              </label>
+              <input
+                type="url"
+                value={twitter}
+                onChange={(e) => setTwitter(e.target.value)}
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
+                placeholder="https://x.com/yourhandle"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-green-200 mb-2">
+                Website
+              </label>
+              <input
+                type="url"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
+                placeholder="https://yoursite.com"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Logo Upload */}
+        <div className="mt-6">
+          <label htmlFor="logo-file" className="block text-sm font-medium text-green-200 mb-2">
                   Token Logo (Optional)
                 </label>
                 <input
@@ -402,44 +501,208 @@ Please check the console for more details.`;
                   onChange={handleFileChange}
                   accept="image/*"
                   aria-label="Upload token logo image"
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+            className="w-full px-4 py-3 bg-green-900/70 border-2 border-green-600 rounded-xl text-white placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:border-transparent transition-all duration-200"
                 />
-                <p className="text-xs text-gray-400 mt-1">
-                  Supported formats: PNG, JPG, GIF
+          <p className="text-xs text-green-300 mt-2">
+            Supported formats: PNG, JPG, GIF (Max 5MB)
                 </p>
               </div>
 
+        {/* Action Buttons */}
+        <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:gap-4 justify-center">
               <button
                 onClick={handleCreateToken}
                 disabled={isLoading || !name || !symbol || !initialSupply}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-md transition-colors duration-200"
-              >
-                {isLoading ? 'Creating Token...' : 'Create Token'}
+            className="flex-1 bg-gradient-to-r from-trash-yellow to-yellow-400 hover:from-yellow-400 hover:to-orange-400 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-black font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg hover:scale-105 disabled:hover:scale-100"
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center">
+                <LoadingSpinner size="sm" text="Creating..." />
+              </span>
+            ) : (
+              '🚀 Create Token'
+            )}
+          </button>
+          
+          {createdToken && (
+            <button
+              onClick={resetForm}
+              className="flex-1 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 shadow-lg hover:scale-105"
+            >
+              🆕 Create Another
               </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
 
-        {status && (
-          <div className="mt-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-            <div className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed">
+      {/* Status Messages */}
+      {status && (
+        <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-6 border-2 border-green-600">
+          <div className="text-center">
+            <div className="text-2xl mb-2">📢</div>
+            <div className="whitespace-pre-wrap break-words text-green-200 leading-relaxed">
               {status}
             </div>
+            </div>
           </div>
         )}
 
-        <div className="mt-8 text-center text-sm text-gray-400">
-          <p>Powered by Gorbagana Chain</p>
-          <p className="mt-2">
-            Explorer: <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-green-400 hover:text-green-300">trashscan.io</a>
-          </p>
-          <p className="mt-1">
-            Token Program: <code className="bg-gray-700 px-2 py-1 rounded text-xs">TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA</code>
-          </p>
-          <p className="mt-1">
-            Metaplex: <code className="bg-gray-700 px-2 py-1 rounded text-xs">metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s</code>
-          </p>
-          <div className="mt-4 flex items-center justify-center text-yellow-400">
+      {/* Created Token Details */}
+      {createdToken && (
+        <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600">
+          <h2 className="text-3xl font-bold text-trash-yellow mb-6 text-center">🎉 Token Created Successfully!</h2>
+          
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* Token Details */}
+            <div className="space-y-4">
+              <h3 className="text-xl font-bold text-trash-yellow mb-4">🪙 Token Information</h3>
+              
+              <div className="bg-green-900/30 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-green-200 font-medium">Name:</span>
+                  <span className="text-white font-bold">{createdToken.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-200 font-medium">Symbol:</span>
+                  <span className="text-white font-bold">{createdToken.symbol}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-200 font-medium">Supply:</span>
+                  <span className="text-white font-bold">{createdToken.initialSupply.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-200 font-medium">Decimals:</span>
+                  <span className="text-white font-bold">{createdToken.decimals}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-200 font-medium">Metadata:</span>
+                  <span className={`font-bold ${createdToken.metadataCreated ? 'text-green-400' : 'text-red-400'}`}>
+                    {createdToken.metadataCreated ? '✅ Created' : '❌ Not Created'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Technical Details */}
+            <div className="space-y-4">
+              <h3 className="text-xl font-bold text-trash-yellow mb-4">🔧 Technical Details</h3>
+              
+              <div className="bg-green-900/30 rounded-xl p-4 space-y-3">
+                <div>
+                  <span className="text-green-200 font-medium block mb-2">Mint Address:</span>
+                  <code className="bg-green-800/50 px-3 py-2 rounded-lg text-white text-sm break-all">
+                    {createdToken.mintAddress}
+                  </code>
+                </div>
+                
+                <div>
+                  <span className="text-green-200 font-medium block mb-2">Transaction:</span>
+                  <code className="bg-green-800/50 px-3 py-2 rounded-lg text-white text-sm break-all">
+                    {createdToken.transactionSignature}
+                  </code>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Social Links */}
+          {createdToken.social && (createdToken.social.telegram || createdToken.social.twitter || createdToken.social.website) && (
+            <div className="mt-6">
+              <h3 className="text-xl font-bold text-trash-yellow mb-4 text-center">Social Links</h3>
+              <div className="flex flex-wrap justify-center gap-4">
+                {createdToken.social.telegram && (
+                  <a
+                    href={createdToken.social.telegram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 hover:scale-105"
+                  >
+                    📱 Telegram
+                  </a>
+                )}
+                {createdToken.social.twitter && (
+                  <a
+                    href={createdToken.social.twitter}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-blue-400 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 hover:scale-105"
+                  >
+                    𝕏 Twitter
+                  </a>
+                )}
+                {createdToken.social.website && (
+                  <a
+                    href={createdToken.social.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-medium transition-colors duration-200 hover:scale-105"
+                  >
+                    🌐 Website
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action Links */}
+          <div className="mt-8 text-center space-y-4">
+            <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-4">
+              <a
+                href={`https://trashcan.io/address/${createdToken.mintAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-trash-yellow hover:bg-yellow-400 text-black font-bold px-6 py-3 rounded-xl transition-colors duration-200 hover:scale-105 text-center"
+              >
+                🔍 View on Explorer
+              </a>
+              <button
+                onClick={() => navigator.clipboard.writeText(createdToken.mintAddress)}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-xl transition-colors duration-200 hover:scale-105"
+              >
+                📋 Copy Mint Address
+              </button>
+            </div>
+            
+            <p className="text-sm text-green-300">
+              Add this token to your wallet using the mint address above
+            </p>
+            </div>
+          </div>
+        )}
+
+      {/* Network Info */}
+      <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-6 border-2 border-green-600">
+        <h3 className="text-xl font-bold text-trash-yellow mb-4 text-center">🌐 Network Information</h3>
+        <div className="grid sm:grid-cols-2 gap-6 text-sm">
+          <div className="space-y-2">
+            <p className="text-green-200">
+              <span className="font-medium">Network:</span> Gorbagana Chain
+            </p>
+            <p className="text-green-200">
+              <span className="font-medium">Explorer:</span>{' '}
+              <a href="https://trashscan.io" target="_blank" rel="noopener noreferrer" className="text-trash-yellow hover:text-yellow-400 underline">
+                trashscan.io
+              </a>
+            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-green-200">
+              <span className="font-medium">Token Program:</span>{' '}
+              <code className="bg-green-800/50 px-2 py-1 rounded text-xs">
+                TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA
+              </code>
+            </p>
+            <p className="text-green-200">
+              <span className="font-medium">Metaplex:</span>{' '}
+              <code className="bg-green-800/50 px-2 py-1 rounded text-xs">
+                metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
+              </code>
+            </p>
+          </div>
+        </div>
+        
+        <div className="mt-4 text-center">
+          <div className="inline-flex items-center text-yellow-400 bg-yellow-900/20 px-4 py-2 rounded-lg">
             <span className="mr-2">⚠️</span>
             <span>Network congestion may cause delays</span>
           </div>

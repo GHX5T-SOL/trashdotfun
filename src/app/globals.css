@@ -2,18 +2,162 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a3c34;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #f4ca16;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e6b800;
+}
+
+/* Global styles */
 body {
-  @apply bg-trash-green font-sans text-white;
+  @apply bg-gradient-to-br from-trash-green via-green-900 to-black font-sans text-white;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-h1, h2, h3 {
-  @apply text-trash-yellow;
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  @apply text-trash-yellow font-black;
 }
 
-input, button {
-  @apply border-2 border-gray-500 rounded-lg bg-gray-800 text-white;
+/* Custom animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
 }
 
-button:hover {
-  @apply bg-trash-yellow text-black;
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px #f4ca16; }
+  50% { box-shadow: 0 0 20px #f4ca16, 0 0 30px #f4ca16; }
+}
+
+@keyframes trash-bounce {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.1) rotate(2deg); }
+  50% { transform: scale(1.05) rotate(-1deg); }
+  75% { transform: scale(1.1) rotate(1deg); }
+}
+
+/* Animation classes */
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.animate-trash-bounce {
+  animation: trash-bounce 2s ease-in-out infinite;
+}
+
+/* Form elements */
+input, textarea, select {
+  @apply border-2 border-green-600 rounded-xl bg-green-900/70 text-white placeholder-green-300;
+  transition: all 0.2s ease-in-out;
+}
+
+input:focus, textarea:focus, select:focus {
+  @apply outline-none ring-2 ring-trash-yellow border-transparent;
+  transform: scale(1.02);
+}
+
+/* Buttons */
+button {
+  @apply border-2 border-green-800 rounded-xl font-bold transition-all duration-200;
+}
+
+button:hover:not(:disabled) {
+  @apply scale-105;
+}
+
+button:disabled {
+  @apply cursor-not-allowed opacity-60;
+}
+
+/* Wallet button customization */
+.wallet-adapter-button {
+  @apply !bg-trash-yellow !text-black !font-bold !px-6 !py-3 !rounded-xl !border-2 !border-green-800 !shadow-lg;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.wallet-adapter-button:hover {
+  @apply !bg-yellow-400 !scale-105 !shadow-xl;
+}
+
+.wallet-adapter-button:not([disabled]):hover {
+  @apply !bg-yellow-400 !scale-105 !shadow-xl;
+}
+
+.wallet-adapter-button-trigger {
+  @apply !bg-trash-yellow !text-black !font-bold !px-6 !py-3 !rounded-xl !border-2 !border-green-800 !shadow-lg;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.wallet-adapter-button-trigger:hover {
+  @apply !bg-yellow-400 !scale-105 !shadow-xl;
+}
+
+/* Card hover effects */
+.card-hover {
+  @apply transition-all duration-300 hover:scale-105 hover:shadow-2xl;
+}
+
+/* Gradient text */
+.gradient-text {
+  @apply text-transparent bg-clip-text bg-gradient-to-r from-trash-yellow via-yellow-400 to-orange-400;
+}
+
+/* Glass morphism effect */
+.glass {
+  @apply bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm border-2 border-green-600;
+}
+
+/* Custom focus styles */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-trash-yellow focus:ring-offset-2 focus:ring-offset-green-900;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-2 border-green-600 border-t-transparent;
+}
+
+/* Success/Error states */
+.success {
+  @apply text-green-400 bg-green-900/20 border-green-400;
+}
+
+.error {
+  @apply text-red-400 bg-red-900/20 border-red-400;
+}
+
+/* Responsive text */
+@media (max-width: 640px) {
+  .responsive-text {
+    @apply text-sm;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  .responsive-text {
+    @apply text-base;
+  }
+}
+
+@media (min-width: 1025px) {
+  .responsive-text {
+    @apply text-lg;
+  }
 }
