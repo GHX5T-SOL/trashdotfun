@@ -130,7 +130,7 @@ export class IPFSService {
       console.log('IPFS Service: UCAN proof validation - first 20 chars:', proof.substring(0, 20));
       console.log('IPFS Service: UCAN proof validation - last 20 chars:', proof.substring(proof.length - 20));
       
-      // Convert base64 to base64url if needed (replace + with -, / with _)
+      // Convert base64 to base64url if needed (replace + with -, / with _, remove padding)
       let normalizedProof = proof;
       if (proof.includes('+') || proof.includes('/') || proof.includes('=')) {
         console.log('IPFS Service: Converting base64 to base64url format');
@@ -145,8 +145,20 @@ export class IPFSService {
       const base64urlRegex = /^[A-Za-z0-9_-]+$/;
       if (!base64urlRegex.test(normalizedProof)) {
         console.log('IPFS Service: Additional normalization needed, cleaning invalid characters');
+        console.log('IPFS Service: Characters before cleaning:', normalizedProof.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
+        
+        // More aggressive cleaning: remove ALL non-base64url characters
         normalizedProof = normalizedProof.replace(/[^A-Za-z0-9_-]/g, '');
+        
+        console.log('IPFS Service: Characters after cleaning:', normalizedProof.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
         console.log('IPFS Service: Final normalized proof length:', normalizedProof.length);
+        
+        // Final validation
+        if (!base64urlRegex.test(normalizedProof)) {
+          console.error('IPFS Service: CRITICAL: Still invalid after aggressive cleaning!');
+          console.error('IPFS Service: Final proof:', normalizedProof);
+          return false;
+        }
       }
       
       // Basic format validation - should be base64url encoded
