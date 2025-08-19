@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
   },
   // Fix for Vercel deployment with Next.js 15
   experimental: {
-    // Disable static export to avoid export-detail.json issues
-    staticExport: false,
+    // Disable static generation for problematic pages
+    workerThreads: false,
   },
   // Use default output for Vercel compatibility
   output: undefined,
