@@ -14,8 +14,8 @@ const nextConfig: NextConfig = {
     // Disable problematic features
     optimizePackageImports: [],
     webVitalsAttribution: [],
-    // Add nftTracing as suggested by Vercel docs
-    nftTracing: true,
+    // Disable file tracing to avoid export-detail.json issues
+    outputFileTracing: false,
   },
   // Minimal config for Vercel compatibility
   trailingSlash: false,
