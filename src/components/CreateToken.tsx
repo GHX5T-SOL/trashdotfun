@@ -23,6 +23,19 @@ import { IPFSService } from '../lib/ipfs';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function CreateToken() {
+  // Prevent SSR rendering of this component
+  if (typeof window === 'undefined') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-trash-green via-green-800 to-green-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🗑️</div>
+          <h1 className="text-2xl font-bold text-trash-yellow mb-2">TrashdotFun</h1>
+          <p className="text-green-200">Loading token creation interface...</p>
+        </div>
+      </div>
+    );
+  }
+
   const { connection } = useConnection();
   const { publicKey, sendTransaction } = useWallet();
   
@@ -59,21 +72,22 @@ export default function CreateToken() {
 
   // Use proxy connection to avoid CORS issues (as recommended by Gorbagana devs)
   const proxyConnection = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      console.log('🔗 CreateToken - Using proxy connection to avoid CORS');
-      return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
+    // During SSR, return null to avoid creating Connection objects
+    if (typeof window === 'undefined') {
+      return null;
     }
-    return connection;
+    
+    console.log('🔗 CreateToken - Using proxy connection to avoid CORS');
+    return new Connection(`${window.location.origin}/api/rpc`, 'confirmed');
   }, [connection]);
 
   // Use proxy connection for all operations
   const workingConnection = useMemo(() => {
-    return proxyConnection;
-  }, [proxyConnection]);
+    return proxyConnection || connection;
+  }, [proxyConnection, connection]);
 
   // Custom transaction confirmation with timeout
   const confirmTransactionWithTimeout = async (
-    connection: Connection,
     signature: string,
     timeoutMs: number
   ): Promise<boolean> => {
@@ -81,7 +95,7 @@ export default function CreateToken() {
     
     while (Date.now() - startTime < timeoutMs) {
       try {
-        const status = await connection.getSignatureStatus(signature);
+        const status = await workingConnection.getSignatureStatus(signature);
         if (status?.value?.confirmationStatus === 'confirmed' || 
             status?.value?.confirmationStatus === 'finalized') {
           return true;
@@ -115,6 +129,12 @@ export default function CreateToken() {
   };
 
   const handleCreateToken = useCallback(async () => {
+    // Prevent token creation during SSR
+    if (typeof window === 'undefined') {
+      setStatus('Token creation is not available during server-side rendering.');
+      return;
+    }
+    
     if (!publicKey || !workingConnection) {
       setStatus('Please connect your wallet first.');
       return;
@@ -299,7 +319,7 @@ export default function CreateToken() {
       
       // Wait for confirmation using our proxy connection
       setStatus('Waiting for transaction confirmation...');
-      const confirmation = await confirmTransactionWithTimeout(workingConnection, finalSignature, 60000);
+      const confirmation = await confirmTransactionWithTimeout(finalSignature, 60000);
 
       if (confirmation) {
         // Check if metadata was created
@@ -379,7 +399,7 @@ Please check the console for more details.`;
 
   if (!publicKey) {
     return (
-      <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600 text-center">
+      <div className="bg-gradient-to-br from-green-800/50 to-green-900 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600 text-center">
         <div className="text-6xl mb-4">🔒</div>
         <h2 className="text-2xl font-bold text-trash-yellow mb-4">Wallet Not Connected</h2>
         <p className="text-green-200 mb-6">Please connect your wallet to start creating tokens</p>
@@ -392,7 +412,7 @@ Please check the console for more details.`;
   return (
     <div className="space-y-8">
       {/* Token Creation Form */}
-      <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600">
+      <div className="bg-gradient-to-br from-green-800/50 to-green-900 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600">
         <h2 className="text-3xl font-bold text-trash-yellow mb-6 text-center">🚀 Create New Token</h2>
         
         <div className="grid lg:grid-cols-2 gap-6">
@@ -562,7 +582,7 @@ Please check the console for more details.`;
 
       {/* Status Messages */}
       {status && (
-        <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-6 border-2 border-green-600">
+        <div className="bg-gradient-to-br from-green-800/50 to-green-900 backdrop-blur-sm rounded-2xl p-6 border-2 border-green-600">
           <div className="text-center">
             <div className="text-2xl mb-2">📢</div>
             <div className="whitespace-pre-wrap break-words text-green-200 leading-relaxed">
@@ -574,7 +594,7 @@ Please check the console for more details.`;
 
       {/* Created Token Details */}
       {createdToken && (
-        <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600">
+        <div className="bg-gradient-to-br from-green-800/50 to-green-900 backdrop-blur-sm rounded-2xl p-8 border-2 border-green-600">
           <h2 className="text-3xl font-bold text-trash-yellow mb-6 text-center">🎉 Token Created Successfully!</h2>
           
           <div className="grid lg:grid-cols-2 gap-8">
@@ -696,7 +716,7 @@ Please check the console for more details.`;
         )}
 
       {/* Network Info */}
-      <div className="bg-gradient-to-br from-green-800/50 to-green-900/50 backdrop-blur-sm rounded-2xl p-6 border-2 border-green-600">
+      <div className="bg-gradient-to-br from-green-800/50 to-green-900 backdrop-blur-sm rounded-2xl p-6 border-2 border-green-600">
         <h3 className="text-xl font-bold text-trash-yellow mb-4 text-center">🌐 Network Information</h3>
         <div className="grid sm:grid-cols-2 gap-6 text-sm">
           <div className="space-y-2">

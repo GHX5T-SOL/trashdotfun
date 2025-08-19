@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import WalletContextProvider from '@/components/WalletContextProvider';
+import ClientOnlyWrapper from '@/components/ClientOnlyWrapper';
 import Header from '@/components/Header';
 
 export const metadata: Metadata = {
@@ -16,10 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-gradient-to-br from-trash-green via-green-900 to-black min-h-screen">
-        <WalletContextProvider>
-          <Header />
-          <main className="pt-4">{children}</main>
-        </WalletContextProvider>
+        <ClientOnlyWrapper>
+          <WalletContextProvider>
+            <Header />
+            <main className="pt-4">{children}</main>
+          </WalletContextProvider>
+        </ClientOnlyWrapper>
       </body>
     </html>
   );

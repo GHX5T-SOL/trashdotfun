@@ -12,14 +12,14 @@ export default function WalletContextProvider({ children }: { children: React.Re
   // Use the backend proxy to avoid CORS issues (as recommended by Gorbagana devs)
   // RPC server -> your server -> your frontend
   const endpoint = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      console.log('🔗 WalletContextProvider - Using Backend Proxy: /api/rpc');
-      console.log('🔗 This follows Gorbagana dev recommendation: RPC server -> your server -> your frontend');
-      return `${window.location.origin}/api/rpc`;
+    // During SSR, return a placeholder that won't be used
+    if (typeof window === 'undefined') {
+      return 'https://placeholder.rpc'; // This won't be used during SSR
     }
-    // For SSR, still use proxy but with a placeholder
-    console.log('🔗 WalletContextProvider - SSR fallback to proxy endpoint');
-    return '/api/rpc';
+    
+    console.log('🔗 WalletContextProvider - Using Backend Proxy: /api/rpc');
+    console.log('🔗 This follows Gorbagana dev recommendation: RPC server -> your server -> your frontend');
+    return `${window.location.origin}/api/rpc`;
   }, []);
 
   const wallets = useMemo(
