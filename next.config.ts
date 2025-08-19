@@ -9,14 +9,7 @@ const nextConfig: NextConfig = {
     // Disable TypeScript checking during build to allow deployment
     ignoreBuildErrors: true,
   },
-  // Fix for Vercel deployment with Next.js 15
-  experimental: {
-    // Disable static generation for problematic pages
-    workerThreads: false,
-  },
-  // Use default output for Vercel compatibility
-  output: undefined,
-  // Disable static generation for problematic pages
+  // Minimal config for Vercel compatibility
   trailingSlash: false,
 }
 
