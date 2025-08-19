@@ -23,6 +23,12 @@ export class IPFSService {
       const didKey = process.env.NEXT_PUBLIC_STORACHA_DID_KEY;
       const signingKey = process.env.NEXT_PUBLIC_STORACHA_SIGNING_KEY;
       
+      // Debug: Log what we're getting
+      console.log('IPFS Service: Environment variables check:');
+      console.log('UCAN Proof:', ucanProof ? 'SET' : 'NOT SET');
+      console.log('DID Key:', didKey ? 'SET' : 'NOT SET');
+      console.log('Signing Key:', signingKey ? 'SET' : 'NOT SET');
+      
       // Check if all required Storacha environment variables are present
       if (!ucanProof || !didKey || !signingKey) {
         console.log('IPFS Service: Storacha environment variables not configured, using mock service');

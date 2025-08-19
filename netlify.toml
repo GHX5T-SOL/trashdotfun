@@ -4,16 +4,13 @@
 
 [build.environment]
   NODE_VERSION = "20"
-
-# Exclude problematic environment variables that cause build failures
-[context.production.environment]
-  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
-
-[context.deploy-preview.environment]
-  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
-
-[context.branch-deploy.environment]
-  NEXT_PUBLIC_STORACHA_UCAN_PROOF = ""
+  NEXT_PUBLIC_RPC_ENDPOINT = "https://rpc.gorbagana.wtf/"
+  NEXT_PUBLIC_EXPLORER_URL = "https://trashscan.io"
+  NEXT_PUBLIC_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+  NEXT_PUBLIC_ASSOCIATED_TOKEN_PROGRAM_ID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+  NEXT_PUBLIC_METAPLEX_PROGRAM_ID = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+  NEXT_PUBLIC_IPFS_GATEWAY = "https://ipfs.io"
+  NEXT_PUBLIC_DEBUG_IPFS = "true"
 
 # Headers for static assets
 [[headers]]

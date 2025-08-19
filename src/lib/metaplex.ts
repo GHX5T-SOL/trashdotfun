@@ -2,6 +2,7 @@ import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
 
 export class MetaplexService {
   private static readonly METAPLEX_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+  private static readonly RENT_PROGRAM_ID = new PublicKey('SysvarRent111111111111111111111111111111111');
   
   /**
    * Create metadata instruction for a token mint using Metaplex v1 structure
@@ -41,6 +42,7 @@ export class MetaplexService {
         { pubkey: mintAuthority, isSigner: true, isWritable: false },
         { pubkey: payer, isSigner: true, isWritable: true },
         { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
+        { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
       ],
       programId: this.METAPLEX_PROGRAM_ID,
       data: instructionData,
@@ -55,13 +57,13 @@ export class MetaplexService {
    * @returns Buffer containing the instruction data
    */
   private static createMetadataInstructionData(name: string, symbol: string, uri: string): Buffer {
-    // Metaplex v1 CreateMetadataAccount instruction
-    // Instruction index: 0 (CreateMetadataAccount)
-    const instructionIndex = 0;
+    // Metaplex v1 CreateMetadataAccountV3 instruction
+    // Instruction index: 33 (CreateMetadataAccountV3)
+    const instructionIndex = 33;
     
-    // Calculate total buffer size correctly
-    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 4 (collection) + 4 (uses)
-    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 4 + 4;
+    // Calculate total buffer size correctly for CreateMetadataAccountV3
+    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 1 (collection) + 1 (uses) + 1 (collection details) + 1 (uses details)
+    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 1 + 1 + 1 + 1;
     
     // Create the data buffer with correct size
     const data = Buffer.alloc(totalSize);
@@ -97,13 +99,21 @@ export class MetaplexService {
     data.writeUInt16LE(0, offset);
     offset += 2;
     
-    // Collection (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
+    // Collection (0 = None)
+    data.writeUInt8(0, offset);
+    offset += 1;
     
-    // Uses (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
+    // Uses (0 = None)
+    data.writeUInt8(0, offset);
+    offset += 1;
+    
+    // Collection details (0 = None)
+    data.writeUInt8(0, offset);
+    offset += 1;
+    
+    // Uses details (0 = None)
+    data.writeUInt8(0, offset);
+    offset += 1;
     
     return data;
   }
@@ -187,6 +197,7 @@ export class MetaplexService {
         { pubkey: mintAuthority, isSigner: true, isWritable: false },
         { pubkey: payer, isSigner: true, isWritable: true },
         { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
+        { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
       ],
       programId: this.METAPLEX_PROGRAM_ID,
       data: instructionData,

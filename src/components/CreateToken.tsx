@@ -111,13 +111,14 @@ export default function CreateToken() {
   // Check if metadata account exists
   const checkMetadataAccountExists = async (mint: PublicKey): Promise<boolean> => {
     try {
+      const METAPLEX_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
       const [metadataAccount] = PublicKey.findProgramAddressSync(
         [
           Buffer.from('metadata'),
-          new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s').toBuffer(),
+          METAPLEX_PROGRAM_ID.toBuffer(),
           mint.toBuffer(),
         ],
-        new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s')
+        METAPLEX_PROGRAM_ID
       );
       
       const accountInfo = await workingConnection.getAccountInfo(metadataAccount);
@@ -310,8 +311,14 @@ export default function CreateToken() {
       // First sign the transaction with the mint keypair
       finalTx.sign(mintKeypair);
       
-      // Send the transaction using our proxy connection
-      const finalSignature = await workingConnection.sendTransaction(finalTx, [mintKeypair], {
+      // Get the wallet's sendTransaction function
+      if (!sendTransaction) {
+        throw new Error('Wallet does not support sending transactions');
+      }
+      
+      // Send the transaction using the wallet's sendTransaction method
+      // This will prompt the user to sign the transaction
+      const finalSignature = await sendTransaction(finalTx, workingConnection, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
         maxRetries: 3,
