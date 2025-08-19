@@ -14,8 +14,10 @@ const nextConfig: NextConfig = {
     // Disable static export to avoid export-detail.json issues
     staticExport: false,
   },
-  // Ensure proper output configuration
-  output: 'standalone',
+  // Use default output for Vercel compatibility
+  output: undefined,
+  // Disable static generation for problematic pages
+  trailingSlash: false,
 }
 
 export default nextConfig
