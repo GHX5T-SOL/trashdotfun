@@ -15,6 +15,7 @@
 Welcome to **TrashdotFun**, the trashiest token launchpad on the Gorbagana Chain! 🚀 Built with a cartoony, Oscar the Grouch-inspired theme, this platform makes creating meme coins as fun as diving into a garbage can.
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-TrashdotFun-00C7B7?style=for-the-badge&logo=netlify)](https://trashdotfun.netlify.app/)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-TrashdotFun-000000?style=for-the-badge&logo=vercel)](https://trashdotfun.vercel.app/)
 [![Gorbagana Chain](https://img.shields.io/badge/Gorbagana_Chain-Testnet-14F46D?style=for-the-badge)](https://rpc.gorbagana.wtf/)
 [![IPFS](https://img.shields.io/badge/IPFS-Storacha_Network-65C2CB?style=for-the-badge&logo=ipfs)](https://storacha.network/)
 
@@ -187,13 +188,38 @@ The platform includes a CORS proxy at `/api/rpc` to avoid cross-origin issues wh
 
 ---
 
+## 🌐 **Live Demo**
+
+**🚀 Multiple Deployment Options Available:**
+
+- **[Netlify Deployment](https://trashdotfun.netlify.app/)** - Primary deployment with automatic GitHub integration
+- **[Vercel Deployment](https://trashdotfun.vercel.app/)** - Secondary deployment for redundancy and performance
+
+Both deployments are automatically synchronized and provide the same functionality. Users can choose their preferred platform for optimal performance in their region.
+
+---
+
 ## 🚀 **Deployment**
 
-### ☁️ **Netlify (Current)**
+### ☁️ **Netlify (Primary)**
 - **Automatic Deployment**: Connected to GitHub with auto-deploy on push 🔄
 - **Environment Variables**: Configured in Netlify dashboard ⚙️
 - **Build Command**: `yarn build` 🏗️
 - **Publish Directory**: `.next` 📁
+- **URL**: [https://trashdotfun.netlify.app/](https://trashdotfun.netlify.app/)
+
+### ⚡ **Vercel (Secondary)**
+- **Automatic Deployment**: Connected to GitHub with auto-deploy on push 🔄
+- **Environment Variables**: Configured in Vercel dashboard ⚙️
+- **Build Command**: `yarn build` 🏗️
+- **Publish Directory**: `.next` 📁
+- **URL**: [https://trashdotfun.vercel.app/](https://trashdotfun.vercel.app/)
+
+### 🎯 **Dual Deployment Benefits**
+- **Redundancy**: If one platform is down, the other remains available
+- **Performance**: Users can choose the platform with better performance in their region
+- **Reliability**: Automatic failover between deployment platforms
+- **Global Reach**: Better coverage across different geographic locations
 
 ### 🖥️ **Manual Deployment**
 ```bash
@@ -235,7 +261,8 @@ We welcome contributions! Please feel free to submit issues and pull requests.
 | **Telegram** | [@trashdotfun](https://t.me/trashdotfun) | ✅ Active |
 | **X (Twitter)** | [@trashdotfun_](https://x.com/trashdotfun_) | ✅ Active |
 | **Website** | [trashdotfun.com](https://trashdotfun.netlify.app/) | ✅ Live |
-| **Live Demo** | [https://trashdotfun.netlify.app/](https://trashdotfun.netlify.app/) | ✅ Deployed |
+| **Live Demo (Netlify)** | [https://trashdotfun.netlify.app/](https://trashdotfun.netlify.app/) | ✅ Deployed |
+| **Live Demo (Vercel)** | [https://trashdotfun.vercel.app/](https://trashdotfun.vercel.app/) | ✅ Deployed |
 
 ---
 
