@@ -12,8 +12,6 @@ const nextConfig = {
     // Disable problematic features that cause issues
     optimizePackageImports: [],
     webVitalsAttribution: [],
-    // Reduce function size
-    serverComponentsExternalPackages: ['@solana/web3.js', '@solana/spl-token', '@storacha/client'],
   },
   // Netlify compatibility settings
   trailingSlash: false,
@@ -25,8 +23,6 @@ const nextConfig = {
   },
   // Ensure proper build output
   distDir: '.next',
-  // Reduce bundle size
-  swcMinify: true,
   // Exclude large packages from server bundle
   webpack: (config, { isServer }) => {
     if (isServer) {
@@ -39,6 +35,8 @@ const nextConfig = {
     }
     return config;
   },
+  // Move serverComponentsExternalPackages to the correct location
+  serverExternalPackages: ['@solana/web3.js', '@solana/spl-token', '@storacha/client'],
 };
 
 module.exports = nextConfig;

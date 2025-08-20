@@ -80,6 +80,7 @@ export default function CreateToken() {
     const proxyUrl = `${window.location.origin}/api/rpc`;
     console.log('🔗 CreateToken - Creating proxy connection to:', proxyUrl);
     console.log('🔗 CreateToken - This ensures ALL RPC calls go through our proxy');
+    console.log('🔗 CreateToken - Following Gorbagana dev recommendation: RPC server → my server → frontend');
     
     return new Connection(proxyUrl, 'confirmed');
   }, []);
@@ -392,7 +393,8 @@ export default function CreateToken() {
       if (metadataUri) {
         try {
           setStatus('Creating Metaplex metadata...');
-          metadataIx = MetaplexService.createLatestMetadataInstruction(
+          // Use the corrected, non-deprecated instruction
+          metadataIx = MetaplexService.createMetadataInstruction(
             mintPublicKey,
             publicKey,
             publicKey,
@@ -400,10 +402,25 @@ export default function CreateToken() {
             symbol,
             metadataUri
           );
-          console.log('Metaplex metadata instruction created');
+          console.log('Metaplex metadata instruction created using current format');
         } catch (error) {
           console.error('Metaplex metadata instruction failed:', error);
-          setStatus('Metaplex metadata failed, but continuing with token creation...');
+          // Try V3 instruction as fallback
+          try {
+            setStatus('Trying alternative metadata format...');
+            metadataIx = MetaplexService.createMetadataV3Instruction(
+              mintPublicKey,
+              publicKey,
+              publicKey,
+              name,
+              symbol,
+              metadataUri
+            );
+            console.log('Metaplex metadata V3 instruction created as fallback');
+          } catch (v3Error) {
+            console.error('Metaplex metadata V3 instruction also failed:', v3Error);
+            setStatus('All metadata formats failed, but continuing with token creation...');
+          }
         }
       }
 
@@ -455,6 +472,7 @@ export default function CreateToken() {
       // Wait for confirmation using our proxy connection
       setStatus('Waiting for transaction confirmation...');
       console.log('🔗 CreateToken - Transaction sent, confirming through proxy...');
+      console.log('🔗 CreateToken - Using proxy connection for confirmation: RPC server → my server → frontend');
       const confirmation = await confirmTransactionWithTimeout(finalSignature, 60000);
 
       if (confirmation) {
@@ -462,6 +480,8 @@ export default function CreateToken() {
         let metadataCreated = false;
         if (metadataUri) {
           try {
+            console.log('🔗 CreateToken - Checking metadata account through proxy...');
+            console.log('🔗 CreateToken - Following RPC server → my server → frontend sequence');
             metadataCreated = await checkMetadataAccountExists(mintPublicKey);
             console.log('Metadata account exists:', metadataCreated);
           } catch (error) {

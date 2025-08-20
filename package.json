@@ -2,6 +2,7 @@
   "name": "trashdotfun",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "engines": {
     "node": ">=20.18.0",
     "yarn": ">=1.22.0"
@@ -15,6 +16,9 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.0.0",
+    "@metaplex-foundation/mpl-token-metadata": "^3.2.0",
+    "@metaplex-foundation/umi": "^0.9.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^0.9.1",
     "@pinata/sdk": "^2.1.0",
     "@project-serum/anchor": "0.26.0",
     "@solana/spl-token": "^0.4.13",

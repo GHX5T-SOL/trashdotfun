@@ -5,7 +5,7 @@ export class MetaplexService {
   private static readonly RENT_PROGRAM_ID = new PublicKey('SysvarRent111111111111111111111111111111111');
   
   /**
-   * Create metadata instruction for a token mint using Metaplex v1 structure
+   * Create metadata instruction for a token mint using current Metaplex structure
    * @param mint - The mint public key
    * @param mintAuthority - The mint authority public key
    * @param payer - The payer public key
@@ -32,8 +32,8 @@ export class MetaplexService {
       this.METAPLEX_PROGRAM_ID
     );
 
-    // Create metadata instruction data according to Metaplex v1 specification
-    const instructionData = this.createMetadataInstructionData(name, symbol, uri);
+    // Create metadata instruction data according to current Metaplex specification
+    const instructionData = this.createCurrentMetadataInstructionData(name, symbol, uri);
     
     return new TransactionInstruction({
       keys: [
@@ -50,26 +50,25 @@ export class MetaplexService {
   }
 
   /**
-   * Create proper metadata instruction data for Metaplex v1
+   * Create current metadata instruction data for Metaplex (non-deprecated)
    * @param name - Token name
    * @param symbol - Token symbol
    * @param uri - Metadata URI (IPFS)
    * @returns Buffer containing the instruction data
    */
-  private static createMetadataInstructionData(name: string, symbol: string, uri: string): Buffer {
-    // Metaplex CreateMetadataAccountV2 instruction (more compatible with Gorbagana Chain)
-    // Instruction index: 16 (CreateMetadataAccountV2)
-    const instructionIndex = 16;
+  private static createCurrentMetadataInstructionData(name: string, symbol: string, uri: string): Buffer {
+    // Current Metaplex CreateMetadataAccount instruction (instruction index: 0)
+    const instructionIndex = 0;
     
-    // Calculate total buffer size for CreateMetadataAccountV2
-    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 1 (has collection) + 1 (has uses)
-    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 1 + 1;
+    // Calculate total buffer size for current CreateMetadataAccount
+    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 4 (collection) + 4 (uses)
+    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 4 + 4;
     
     // Create the data buffer with correct size
     const data = Buffer.alloc(totalSize);
     let offset = 0;
     
-    // Instruction index
+    // Instruction index (0 = CreateMetadataAccount)
     data.writeUInt8(instructionIndex, offset);
     offset += 1;
     
@@ -99,19 +98,19 @@ export class MetaplexService {
     data.writeUInt16LE(0, offset);
     offset += 2;
     
-    // Has collection (false)
-    data.writeUInt8(0, offset);
-    offset += 1;
+    // Collection (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
     
-    // Has uses (false)
-    data.writeUInt8(0, offset);
-    offset += 1;
+    // Uses (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
     
     return data;
   }
 
   /**
-   * Create a simplified metadata instruction for Gorbagana Chain
+   * Create a simplified metadata instruction for Gorbagana Chain using current format
    * @param mint - The mint public key
    * @param mintAuthority - The mint authority public key
    * @param payer - The payer public key
@@ -149,7 +148,7 @@ export class MetaplexService {
   }
 
   /**
-   * Create a complete metadata instruction with all required fields
+   * Create a complete metadata instruction with all required fields using current format
    * @param mint - The mint public key
    * @param mintAuthority - The mint authority public key
    * @param payer - The payer public key
@@ -179,7 +178,7 @@ export class MetaplexService {
       this.METAPLEX_PROGRAM_ID
     );
 
-    // Create metadata instruction data
+    // Create metadata instruction data using current format
     const instructionData = this.createCompleteMetadataInstructionData(metadata);
     
     return new TransactionInstruction({
@@ -197,7 +196,7 @@ export class MetaplexService {
   }
 
   /**
-   * Create complete metadata instruction data
+   * Create complete metadata instruction data using current format
    * @param metadata - Complete metadata object
    * @returns Buffer containing the instruction data
    */
@@ -209,10 +208,10 @@ export class MetaplexService {
     image?: string;
     attributes?: Array<{ trait_type: string; value: string }>;
   }): Buffer {
-    // Metaplex v1 CreateMetadataAccount instruction
+    // Current Metaplex CreateMetadataAccount instruction (index 0)
     const instructionIndex = 0;
     
-    // Calculate total size needed
+    // Calculate total size needed for current format
     let totalSize = 1 + 4 + metadata.name.length + 4 + metadata.symbol.length + 4 + metadata.uri.length;
     totalSize += 4 + 0; // Creator array (empty)
     totalSize += 2; // Seller fee basis points
@@ -223,7 +222,7 @@ export class MetaplexService {
     const data = Buffer.alloc(totalSize);
     let offset = 0;
     
-    // Instruction index
+    // Instruction index (0 = CreateMetadataAccount)
     data.writeUInt8(instructionIndex, offset);
     offset += 1;
     
@@ -252,6 +251,112 @@ export class MetaplexService {
     // Seller fee basis points (0 for now)
     data.writeUInt16LE(0, offset);
     offset += 2;
+    
+    // Collection (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
+    
+    // Uses (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
+    
+    return data;
+  }
+
+  /**
+   * Alternative method using CreateMetadataAccountV3 instruction if needed
+   * This is a more recent instruction that might be more compatible
+   */
+  static createMetadataV3Instruction(
+    mint: PublicKey,
+    mintAuthority: PublicKey,
+    payer: PublicKey,
+    name: string,
+    symbol: string,
+    uri: string
+  ): TransactionInstruction {
+    // Derive the metadata account address
+    const [metadataAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('metadata'),
+        this.METAPLEX_PROGRAM_ID.toBuffer(),
+        mint.toBuffer(),
+      ],
+      this.METAPLEX_PROGRAM_ID
+    );
+
+    // Create metadata instruction data for V3
+    const instructionData = this.createMetadataV3InstructionData(name, symbol, uri);
+    
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: metadataAccount, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: mintAuthority, isSigner: true, isWritable: false },
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
+        { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
+      ],
+      programId: this.METAPLEX_PROGRAM_ID,
+      data: instructionData,
+    });
+  }
+
+  /**
+   * Create metadata V3 instruction data
+   * @param name - Token name
+   * @param symbol - Token symbol
+   * @param uri - Metadata URI (IPFS)
+   * @returns Buffer containing the instruction data
+   */
+  private static createMetadataV3InstructionData(name: string, symbol: string, uri: string): Buffer {
+    // Metaplex CreateMetadataAccountV3 instruction (index: 33)
+    const instructionIndex = 33;
+    
+    // Calculate total buffer size for V3
+    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 1 + 1 + 4 + 4;
+    
+    // Create the data buffer
+    const data = Buffer.alloc(totalSize);
+    let offset = 0;
+    
+    // Instruction index (33 = CreateMetadataAccountV3)
+    data.writeUInt8(instructionIndex, offset);
+    offset += 1;
+    
+    // Name length and data
+    data.writeUInt32LE(name.length, offset);
+    offset += 4;
+    data.write(name, offset, 'utf8');
+    offset += name.length;
+    
+    // Symbol length and data
+    data.writeUInt32LE(symbol.length, offset);
+    offset += 4;
+    data.write(symbol, offset, 'utf8');
+    offset += symbol.length;
+    
+    // URI length and data
+    data.writeUInt32LE(uri.length, offset);
+    offset += 4;
+    data.write(uri, offset, 'utf8');
+    offset += uri.length;
+    
+    // Creator array (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
+    
+    // Seller fee basis points (0 for now)
+    data.writeUInt16LE(0, offset);
+    offset += 2;
+    
+    // Has collection (false)
+    data.writeUInt8(0, offset);
+    offset += 1;
+    
+    // Has uses (false)
+    data.writeUInt8(0, offset);
+    offset += 1;
     
     // Collection (empty for now)
     data.writeUInt32LE(0, offset);

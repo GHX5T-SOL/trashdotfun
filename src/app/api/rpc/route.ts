@@ -4,6 +4,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
+    console.log('🔗 RPC Proxy - Forwarding request to Gorbagana RPC');
+    console.log('🔗 RPC Proxy - This ensures ALL calls go through: RPC server → my server → frontend');
+    
     // Forward the request to Gorbagana RPC
     const response = await fetch('https://rpc.gorbagana.wtf/', {
       method: 'POST',
@@ -15,10 +18,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
+      console.error('🔗 RPC Proxy - Gorbagana RPC returned error:', response.status, response.statusText);
       throw new Error(`RPC request failed: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
+    
+    console.log('🔗 RPC Proxy - Successfully forwarded request and received response');
     
     // Return the RPC response with proper CORS headers
     return NextResponse.json(data, {
@@ -30,9 +36,13 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('RPC Proxy Error:', error);
+    console.error('🔗 RPC Proxy Error:', error);
     return NextResponse.json(
-      { error: 'RPC request failed', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'RPC request failed', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        message: 'All RPC calls must go through: RPC server → my server → frontend'
+      },
       { 
         status: 500,
         headers: {
