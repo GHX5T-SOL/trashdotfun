@@ -19,9 +19,13 @@ export class IPFSService {
    */
   private async initializeClient() {
     try {
-      const ucanProof = process.env.NEXT_PUBLIC_STORACHA_UCAN_PROOF;
-      const didKey = process.env.NEXT_PUBLIC_STORACHA_DID_KEY;
-      const signingKey = process.env.NEXT_PUBLIC_STORACHA_SIGNING_KEY;
+      // Use NEXT_PUBLIC_ prefix for client-side environment variables
+      const ucanProof = process.env.NEXT_PUBLIC_STORACHA_UCAN_PROOF || 
+                       (typeof window !== 'undefined' ? (window as any).__ENV__?.STORACHA_UCAN_PROOF : null);
+      const didKey = process.env.NEXT_PUBLIC_STORACHA_DID_KEY || 
+                    (typeof window !== 'undefined' ? (window as any).__ENV__?.STORACHA_DID_KEY : null);
+      const signingKey = process.env.NEXT_PUBLIC_STORACHA_SIGNING_KEY || 
+                        (typeof window !== 'undefined' ? (window as any).__ENV__?.STORACHA_SIGNING_KEY : null);
       
       // Debug: Log what we're getting
       console.log('IPFS Service: Environment variables check:');
@@ -32,6 +36,10 @@ export class IPFSService {
       // Check if all required Storacha environment variables are present
       if (!ucanProof || !didKey || !signingKey) {
         console.log('IPFS Service: Storacha environment variables not configured, using mock service');
+        console.log('IPFS Service: To enable real IPFS, ensure these environment variables are set:');
+        console.log('IPFS Service: - NEXT_PUBLIC_STORACHA_UCAN_PROOF');
+        console.log('IPFS Service: - NEXT_PUBLIC_STORACHA_DID_KEY');
+        console.log('IPFS Service: - NEXT_PUBLIC_STORACHA_SIGNING_KEY');
         this.useMockService = true;
         return;
       }

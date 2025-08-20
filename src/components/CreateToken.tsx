@@ -68,6 +68,7 @@ export default function CreateToken() {
       twitter?: string;
       website?: string;
     };
+    instructionType?: string;
   } | null>(null);
 
   // Use proxy connection to avoid CORS issues (as recommended by Gorbagana devs)
@@ -291,48 +292,11 @@ export default function CreateToken() {
       setStatus('Getting mint account requirements...');
       const mintRent = await workingConnection.getMinimumBalanceForRentExemption(MINT_SIZE);
 
-      // Create mint account instruction
-      const createMintAccountIx = SystemProgram.createAccount({
-        fromPubkey: publicKey,
-        newAccountPubkey: mintPublicKey,
-        space: MINT_SIZE,
-        lamports: mintRent,
-        programId: TOKEN_PROGRAM_ID,
-      });
-
-      // Initialize mint instruction
-      const initializeMintIx = createInitializeMintInstruction(
-        mintPublicKey,
-        decimals,
-        publicKey,
-        publicKey,
-        TOKEN_PROGRAM_ID
-      );
-
       // Get associated token account address
       const associatedTokenAddress = await getAssociatedTokenAddress(
         mintKeypair.publicKey,
         publicKey,
         false,
-        TOKEN_PROGRAM_ID
-      );
-
-      // Create associated token account instruction
-      const createATAIx = createAssociatedTokenAccountInstruction(
-        publicKey,
-        associatedTokenAddress,
-        publicKey,
-        mintPublicKey,
-        TOKEN_PROGRAM_ID
-      );
-
-      // Mint tokens to the associated token account
-      const mintToIx = createMintToInstruction(
-        mintPublicKey,
-        associatedTokenAddress,
-        publicKey,
-        Number(initialSupply * Math.pow(10, decimals)),
-        [],
         TOKEN_PROGRAM_ID
       );
 
@@ -388,40 +352,44 @@ export default function CreateToken() {
         }
       }
 
-      // Create Metaplex metadata instruction if we have metadata
-      let metadataIx = null;
-      if (metadataUri) {
-        try {
-          setStatus('Creating Metaplex metadata...');
-          // Use the corrected, non-deprecated instruction
-          metadataIx = MetaplexService.createMetadataInstruction(
-            mintPublicKey,
-            publicKey,
-            publicKey,
-            name,
-            symbol,
-            metadataUri
-          );
-          console.log('Metaplex metadata instruction created using current format');
-        } catch (error) {
-          console.error('Metaplex metadata instruction failed:', error);
-          // Try V3 instruction as fallback
-          try {
-            setStatus('Trying alternative metadata format...');
-            metadataIx = MetaplexService.createMetadataV3Instruction(
-              mintPublicKey,
-              publicKey,
-              publicKey,
-              name,
-              symbol,
-              metadataUri
-            );
-            console.log('Metaplex metadata V3 instruction created as fallback');
-          } catch (v3Error) {
-            console.error('Metaplex metadata V3 instruction also failed:', v3Error);
-            setStatus('All metadata formats failed, but continuing with token creation...');
-          }
-        }
+      // Try to create token with V3 instruction first
+      let transaction: Transaction;
+      let useV3Instruction = true;
+      
+      try {
+        setStatus('Creating token with modern metadata instruction...');
+        transaction = MetaplexService.createTokenCreationTransactionWithFallback(
+          mintKeypair,
+          publicKey,
+          publicKey,
+          name,
+          symbol,
+          metadataUri || `https://example.com/metadata/${name.toLowerCase()}.json`,
+          decimals,
+          Number(initialSupply * Math.pow(10, decimals)),
+          associatedTokenAddress,
+          useV3Instruction
+        );
+        console.log('Token creation transaction created with V3 instruction');
+      } catch (error) {
+        console.error('V3 instruction failed, trying basic instruction:', error);
+        setStatus('Trying alternative metadata format...');
+        
+        // Fallback to basic instruction
+        useV3Instruction = false;
+        transaction = MetaplexService.createTokenCreationTransactionWithFallback(
+          mintKeypair,
+          publicKey,
+          publicKey,
+          name,
+          symbol,
+          metadataUri || `https://example.com/metadata/${name.toLowerCase()}.json`,
+          decimals,
+          Number(initialSupply * Math.pow(10, decimals)),
+          associatedTokenAddress,
+          useV3Instruction
+        );
+        console.log('Token creation transaction created with basic instruction');
       }
 
       // Add compute budget instructions for priority fees
@@ -433,31 +401,20 @@ export default function CreateToken() {
         microLamports: 50_000,
       });
 
-      // Build final transaction
-      const finalTx = new Transaction();
-      
       // Add compute budget instructions first
-      finalTx.add(modifyComputeUnitsIx, addPriorityFeeIx);
-      
-      // Add token creation instructions
-      finalTx.add(createMintAccountIx, initializeMintIx, createATAIx, mintToIx);
-      
-      // Add metadata instruction if available
-      if (metadataIx) {
-        finalTx.add(metadataIx);
-      }
+      transaction.add(modifyComputeUnitsIx, addPriorityFeeIx);
 
       // Get recent blockhash using proxy connection
       setStatus('Getting recent blockhash...');
       const { blockhash } = await workingConnection.getLatestBlockhash('finalized');
-      finalTx.recentBlockhash = blockhash;
-      finalTx.feePayer = publicKey;
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
 
       // Sign and send transaction
       setStatus('Signing and sending transaction...');
       
       // First sign the transaction with the mint keypair
-      finalTx.sign(mintKeypair);
+      transaction.sign(mintKeypair);
       
       // Get the wallet's sendTransaction function
       if (!sendTransaction) {
@@ -467,7 +424,8 @@ export default function CreateToken() {
       // Send the transaction using our ULTIMATE BYPASS approach
       // This completely bypasses the wallet adapter and uses raw transaction signing
       console.log('🔗 CreateToken - Using ULTIMATE BYPASS for transaction...');
-      const finalSignature = await sendTransactionUltimate(finalTx);
+      console.log('🔗 CreateToken - Instruction type:', useV3Instruction ? 'V3 (Modern)' : 'Basic (Fallback)');
+      const finalSignature = await sendTransactionUltimate(transaction);
       
       // Wait for confirmation using our proxy connection
       setStatus('Waiting for transaction confirmation...');
@@ -498,6 +456,7 @@ export default function CreateToken() {
           mintAddress: mintPublicKey.toString(),
           transactionSignature: finalSignature,
           metadataCreated,
+          instructionType: useV3Instruction ? 'V3 (Modern)' : 'Basic (Fallback)',
           social: {
             telegram,
             twitter,
@@ -522,6 +481,14 @@ export default function CreateToken() {
         
 This suggests the backend proxy isn't working properly. 
 Please check the console for more details.`;
+      }
+      
+      if (errorMessage.includes('custom program error: 0x4b')) {
+        errorMessage = `Metaplex Instruction Error: ${errorMessage}
+        
+This suggests the metadata instruction format is not compatible with Gorbagana Chain.
+The system tried both V3 and Basic instruction formats.
+Please check the console for detailed instruction information.`;
       }
       
       setStatus(`❌ Error creating token: ${errorMessage}`);
@@ -779,6 +746,12 @@ Please check the console for more details.`;
                   <span className="text-green-200 font-medium">Metadata:</span>
                   <span className={`font-bold ${createdToken.metadataCreated ? 'text-green-400' : 'text-red-400'}`}>
                     {createdToken.metadataCreated ? '✅ Created' : '❌ Not Created'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-green-200 font-medium">Instruction Type:</span>
+                  <span className="text-blue-400 font-bold">
+                    {createdToken.instructionType || 'Unknown'}
                   </span>
                 </div>
               </div>

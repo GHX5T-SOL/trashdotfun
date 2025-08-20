@@ -1,273 +1,115 @@
-import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Connection, PublicKey, TransactionInstruction, Transaction } from '@solana/web3.js';
+import { 
+  createInitializeMintInstruction,
+  createMintToInstruction,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddress,
+  MINT_SIZE
+} from '@solana/spl-token';
 
 export class MetaplexService {
   private static readonly METAPLEX_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
   private static readonly RENT_PROGRAM_ID = new PublicKey('SysvarRent111111111111111111111111111111111');
   
   /**
-   * Create metadata instruction for a token mint using current Metaplex structure
-   * @param mint - The mint public key
-   * @param mintAuthority - The mint authority public key
-   * @param payer - The payer public key
-   * @param name - Token name
-   * @param symbol - Token symbol
-   * @param uri - Metadata URI (IPFS)
-   * @returns TransactionInstruction for creating metadata
+   * Create a complete token creation transaction with metadata using modern approach
+   * This method creates the entire transaction in the correct order
    */
-  static createMetadataInstruction(
-    mint: PublicKey,
-    mintAuthority: PublicKey,
+  static createTokenCreationTransaction(
+    mintKeypair: any,
     payer: PublicKey,
+    mintAuthority: PublicKey,
     name: string,
     symbol: string,
-    uri: string
-  ): TransactionInstruction {
-    // Derive the metadata account address
-    const [metadataAccount] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('metadata'),
-        this.METAPLEX_PROGRAM_ID.toBuffer(),
-        mint.toBuffer(),
-      ],
-      this.METAPLEX_PROGRAM_ID
-    );
-
-    // Create metadata instruction data according to current Metaplex specification
-    const instructionData = this.createCurrentMetadataInstructionData(name, symbol, uri);
+    uri: string,
+    decimals: number,
+    initialSupply: number,
+    associatedTokenAddress: PublicKey
+  ): Transaction {
+    const transaction = new Transaction();
     
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: metadataAccount, isSigner: false, isWritable: true },
-        { pubkey: mint, isSigner: false, isWritable: false },
-        { pubkey: mintAuthority, isSigner: true, isWritable: false },
-        { pubkey: payer, isSigner: true, isWritable: true },
-        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
-        { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
-      ],
-      programId: this.METAPLEX_PROGRAM_ID,
-      data: instructionData,
+    // 1. Create mint account
+    const createMintAccountIx = this.createMintAccountInstruction(
+      mintKeypair.publicKey,
+      payer,
+      MINT_SIZE
+    );
+    
+    // 2. Initialize mint
+    const initializeMintIx = createInitializeMintInstruction(
+      mintKeypair.publicKey,
+      decimals,
+      mintAuthority,
+      mintAuthority,
+      TOKEN_PROGRAM_ID
+    );
+    
+    // 3. Create associated token account
+    const createATAIx = createAssociatedTokenAccountInstruction(
+      payer,
+      associatedTokenAddress,
+      mintAuthority,
+      mintKeypair.publicKey,
+      TOKEN_PROGRAM_ID
+    );
+    
+    // 4. Mint tokens to associated token account
+    const mintToIx = createMintToInstruction(
+      mintKeypair.publicKey,
+      associatedTokenAddress,
+      mintAuthority,
+      initialSupply,
+      [],
+      TOKEN_PROGRAM_ID
+    );
+    
+    // 5. Create metadata account (using modern approach)
+    const createMetadataIx = this.createModernMetadataInstruction(
+      mintKeypair.publicKey,
+      mintAuthority,
+      payer,
+      name,
+      symbol,
+      uri
+    );
+    
+    // Add all instructions in the correct order
+    transaction.add(
+      createMintAccountIx,
+      initializeMintIx,
+      createATAIx,
+      mintToIx,
+      createMetadataIx
+    );
+    
+    return transaction;
+  }
+  
+  /**
+   * Create mint account instruction
+   */
+  private static createMintAccountInstruction(
+    mintPublicKey: PublicKey,
+    payer: PublicKey,
+    space: number
+  ): TransactionInstruction {
+    const { SystemProgram } = require('@solana/web3.js');
+    
+    return SystemProgram.createAccount({
+      fromPubkey: payer,
+      newAccountPubkey: mintPublicKey,
+      space: space,
+      lamports: 0, // Will be set by the client
+      programId: TOKEN_PROGRAM_ID,
     });
   }
-
+  
   /**
-   * Create current metadata instruction data for Metaplex (non-deprecated)
-   * @param name - Token name
-   * @param symbol - Token symbol
-   * @param uri - Metadata URI (IPFS)
-   * @returns Buffer containing the instruction data
+   * Create metadata instruction using the modern CreateMetadataAccountV3 approach
+   * This is the current standard instruction that should work on Gorbagana
    */
-  private static createCurrentMetadataInstructionData(name: string, symbol: string, uri: string): Buffer {
-    // Current Metaplex CreateMetadataAccount instruction (instruction index: 0)
-    const instructionIndex = 0;
-    
-    // Calculate total buffer size for current CreateMetadataAccount
-    // 1 (instruction) + 4 (name len) + name + 4 (symbol len) + symbol + 4 (uri len) + uri + 4 (creators len) + 2 (seller fee) + 4 (collection) + 4 (uses)
-    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 4 + 4;
-    
-    // Create the data buffer with correct size
-    const data = Buffer.alloc(totalSize);
-    let offset = 0;
-    
-    // Instruction index (0 = CreateMetadataAccount)
-    data.writeUInt8(instructionIndex, offset);
-    offset += 1;
-    
-    // Name length and data
-    data.writeUInt32LE(name.length, offset);
-    offset += 4;
-    data.write(name, offset, 'utf8');
-    offset += name.length;
-    
-    // Symbol length and data
-    data.writeUInt32LE(symbol.length, offset);
-    offset += 4;
-    data.write(symbol, offset, 'utf8');
-    offset += symbol.length;
-    
-    // URI length and data
-    data.writeUInt32LE(uri.length, offset);
-    offset += 4;
-    data.write(uri, offset, 'utf8');
-    offset += uri.length;
-    
-    // Creator array (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
-    
-    // Seller fee basis points (0 for now)
-    data.writeUInt16LE(0, offset);
-    offset += 2;
-    
-    // Collection (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
-    
-    // Uses (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
-    
-    return data;
-  }
-
-  /**
-   * Create a simplified metadata instruction for Gorbagana Chain using current format
-   * @param mint - The mint public key
-   * @param mintAuthority - The mint authority public key
-   * @param payer - The payer public key
-   * @param name - Token name
-   * @param symbol - Token symbol
-   * @param uri - Metadata URI (IPFS)
-   * @returns TransactionInstruction for creating metadata
-   */
-  static createLatestMetadataInstruction(
-    mint: PublicKey,
-    mintAuthority: PublicKey,
-    payer: PublicKey,
-    name: string,
-    symbol: string,
-    uri: string
-  ): TransactionInstruction {
-    return this.createMetadataInstruction(mint, mintAuthority, payer, name, symbol, uri);
-  }
-
-  /**
-   * Get the metadata account address for a mint
-   * @param mint - The mint public key
-   * @returns PublicKey of the metadata account
-   */
-  static getMetadataAccount(mint: PublicKey): PublicKey {
-    const [metadataAccount] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('metadata'),
-        this.METAPLEX_PROGRAM_ID.toBuffer(),
-        mint.toBuffer(),
-      ],
-      this.METAPLEX_PROGRAM_ID
-    );
-    return metadataAccount;
-  }
-
-  /**
-   * Create a complete metadata instruction with all required fields using current format
-   * @param mint - The mint public key
-   * @param mintAuthority - The mint authority public key
-   * @param payer - The payer public key
-   * @param metadata - Complete metadata object
-   * @returns TransactionInstruction for creating metadata
-   */
-  static createCompleteMetadataInstruction(
-    mint: PublicKey,
-    mintAuthority: PublicKey,
-    payer: PublicKey,
-    metadata: {
-      name: string;
-      symbol: string;
-      uri: string;
-      description?: string;
-      image?: string;
-      attributes?: Array<{ trait_type: string; value: string }>;
-    }
-  ): TransactionInstruction {
-    // Derive the metadata account address
-    const [metadataAccount] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from('metadata'),
-        this.METAPLEX_PROGRAM_ID.toBuffer(),
-        mint.toBuffer(),
-      ],
-      this.METAPLEX_PROGRAM_ID
-    );
-
-    // Create metadata instruction data using current format
-    const instructionData = this.createCompleteMetadataInstructionData(metadata);
-    
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: metadataAccount, isSigner: false, isWritable: true },
-        { pubkey: mint, isSigner: false, isWritable: false },
-        { pubkey: mintAuthority, isSigner: true, isWritable: false },
-        { pubkey: payer, isSigner: true, isWritable: true },
-        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
-        { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
-      ],
-      programId: this.METAPLEX_PROGRAM_ID,
-      data: instructionData,
-    });
-  }
-
-  /**
-   * Create complete metadata instruction data using current format
-   * @param metadata - Complete metadata object
-   * @returns Buffer containing the instruction data
-   */
-  private static createCompleteMetadataInstructionData(metadata: {
-    name: string;
-    symbol: string;
-    uri: string;
-    description?: string;
-    image?: string;
-    attributes?: Array<{ trait_type: string; value: string }>;
-  }): Buffer {
-    // Current Metaplex CreateMetadataAccount instruction (index 0)
-    const instructionIndex = 0;
-    
-    // Calculate total size needed for current format
-    let totalSize = 1 + 4 + metadata.name.length + 4 + metadata.symbol.length + 4 + metadata.uri.length;
-    totalSize += 4 + 0; // Creator array (empty)
-    totalSize += 2; // Seller fee basis points
-    totalSize += 4 + 0; // Collection (empty)
-    totalSize += 4 + 0; // Uses (empty)
-    
-    // Create the data buffer
-    const data = Buffer.alloc(totalSize);
-    let offset = 0;
-    
-    // Instruction index (0 = CreateMetadataAccount)
-    data.writeUInt8(instructionIndex, offset);
-    offset += 1;
-    
-    // Name length and data
-    data.writeUInt32LE(metadata.name.length, offset);
-    offset += 4;
-    data.write(metadata.name, offset, 'utf8');
-    offset += metadata.name.length;
-    
-    // Symbol length and data
-    data.writeUInt32LE(metadata.symbol.length, offset);
-    offset += 4;
-    data.write(metadata.symbol, offset, 'utf8');
-    offset += metadata.symbol.length;
-    
-    // URI length and data
-    data.writeUInt32LE(metadata.uri.length, offset);
-    offset += 4;
-    data.write(metadata.uri, offset, 'utf8');
-    offset += metadata.uri.length;
-    
-    // Creator array (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
-    
-    // Seller fee basis points (0 for now)
-    data.writeUInt16LE(0, offset);
-    offset += 2;
-    
-    // Collection (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
-    
-    // Uses (empty for now)
-    data.writeUInt32LE(0, offset);
-    offset += 4;
-    
-    return data;
-  }
-
-  /**
-   * Alternative method using CreateMetadataAccountV3 instruction if needed
-   * This is a more recent instruction that might be more compatible
-   */
-  static createMetadataV3Instruction(
+  private static createModernMetadataInstruction(
     mint: PublicKey,
     mintAuthority: PublicKey,
     payer: PublicKey,
@@ -285,9 +127,15 @@ export class MetaplexService {
       this.METAPLEX_PROGRAM_ID
     );
 
-    // Create metadata instruction data for V3
+    // Create metadata instruction data for CreateMetadataAccountV3 (instruction index: 33)
     const instructionData = this.createMetadataV3InstructionData(name, symbol, uri);
     
+    console.log('🔧 MetaplexService - Creating V3 instruction:');
+    console.log('🔧 MetaplexService - Instruction index: 33 (CreateMetadataAccountV3)');
+    console.log('🔧 MetaplexService - Data length:', instructionData.length);
+    console.log('🔧 MetaplexService - First byte:', instructionData[0]);
+    console.log('🔧 MetaplexService - Metadata account:', metadataAccount.toString());
+    
     return new TransactionInstruction({
       keys: [
         { pubkey: metadataAccount, isSigner: false, isWritable: true },
@@ -303,11 +151,8 @@ export class MetaplexService {
   }
 
   /**
-   * Create metadata V3 instruction data
-   * @param name - Token name
-   * @param symbol - Token symbol
-   * @param uri - Metadata URI (IPFS)
-   * @returns Buffer containing the instruction data
+   * Create metadata V3 instruction data (CreateMetadataAccountV3)
+   * This is the current standard that should work on modern Solana forks
    */
   private static createMetadataV3InstructionData(name: string, symbol: string, uri: string): Buffer {
     // Metaplex CreateMetadataAccountV3 instruction (index: 33)
@@ -367,5 +212,207 @@ export class MetaplexService {
     offset += 4;
     
     return data;
+  }
+
+  /**
+   * Alternative: Try using the CreateMetadataAccount instruction (index: 0)
+   * This is the most basic instruction that should be compatible
+   */
+  private static createBasicMetadataInstruction(
+    mint: PublicKey,
+    mintAuthority: PublicKey,
+    payer: PublicKey,
+    name: string,
+    symbol: string,
+    uri: string
+  ): TransactionInstruction {
+    // Derive the metadata account address
+    const [metadataAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('metadata'),
+        this.METAPLEX_PROGRAM_ID.toBuffer(),
+        mint.toBuffer(),
+      ],
+      this.METAPLEX_PROGRAM_ID
+    );
+
+    // Create metadata instruction data for CreateMetadataAccount (instruction index: 0)
+    const instructionData = this.createBasicMetadataInstructionData(name, symbol, uri);
+    
+    console.log('🔧 MetaplexService - Creating Basic instruction:');
+    console.log('🔧 MetaplexService - Instruction index: 0 (CreateMetadataAccount)');
+    console.log('🔧 MetaplexService - Data length:', instructionData.length);
+    console.log('🔧 MetaplexService - First byte:', instructionData[0]);
+    console.log('🔧 MetaplexService - Metadata account:', metadataAccount.toString());
+    
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: metadataAccount, isSigner: false, isWritable: true },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: mintAuthority, isSigner: true, isWritable: false },
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
+        { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
+      ],
+      programId: this.METAPLEX_PROGRAM_ID,
+      data: instructionData,
+    });
+  }
+
+  /**
+   * Create basic metadata instruction data (CreateMetadataAccount)
+   */
+  private static createBasicMetadataInstructionData(name: string, symbol: string, uri: string): Buffer {
+    // Metaplex CreateMetadataAccount instruction (index: 0)
+    const instructionIndex = 0;
+    
+    // Calculate total buffer size for basic CreateMetadataAccount
+    const totalSize = 1 + 4 + name.length + 4 + symbol.length + 4 + uri.length + 4 + 2 + 4 + 4;
+    
+    // Create the data buffer
+    const data = Buffer.alloc(totalSize);
+    let offset = 0;
+    
+    // Instruction index (0 = CreateMetadataAccount)
+    data.writeUInt8(instructionIndex, offset);
+    offset += 1;
+    
+    // Name length and data
+    data.writeUInt32LE(name.length, offset);
+    offset += 4;
+    data.write(name, offset, 'utf8');
+    offset += name.length;
+    
+    // Symbol length and data
+    data.writeUInt32LE(symbol.length, offset);
+    offset += 4;
+    data.write(symbol, offset, 'utf8');
+    offset += symbol.length;
+    
+    // URI length and data
+    data.writeUInt32LE(uri.length, offset);
+    offset += 4;
+    data.write(uri, offset, 'utf8');
+    offset += uri.length;
+    
+    // Creator array (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
+    
+    // Seller fee basis points (0 for now)
+    data.writeUInt16LE(0, offset);
+    offset += 2;
+    
+    // Collection (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
+    
+    // Uses (empty for now)
+    data.writeUInt32LE(0, offset);
+    offset += 4;
+    
+    return data;
+  }
+
+  /**
+   * Get the metadata account address for a mint
+   */
+  static getMetadataAccount(mint: PublicKey): PublicKey {
+    const [metadataAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from('metadata'),
+        this.METAPLEX_PROGRAM_ID.toBuffer(),
+        mint.toBuffer(),
+      ],
+      this.METAPLEX_PROGRAM_ID
+    );
+    return metadataAccount;
+  }
+
+  /**
+   * Create a transaction with fallback metadata instructions
+   * This tries multiple instruction types to find one that works
+   */
+  static createTokenCreationTransactionWithFallback(
+    mintKeypair: any,
+    payer: PublicKey,
+    mintAuthority: PublicKey,
+    name: string,
+    symbol: string,
+    uri: string,
+    decimals: number,
+    initialSupply: number,
+    associatedTokenAddress: PublicKey,
+    useV3Instruction: boolean = true
+  ): Transaction {
+    const transaction = new Transaction();
+    
+    // 1. Create mint account
+    const createMintAccountIx = this.createMintAccountInstruction(
+      mintKeypair.publicKey,
+      payer,
+      MINT_SIZE
+    );
+    
+    // 2. Initialize mint
+    const initializeMintIx = createInitializeMintInstruction(
+      mintKeypair.publicKey,
+      decimals,
+      mintAuthority,
+      mintAuthority,
+      TOKEN_PROGRAM_ID
+    );
+    
+    // 3. Create associated token account
+    const createATAIx = createAssociatedTokenAccountInstruction(
+      payer,
+      associatedTokenAddress,
+      mintAuthority,
+      mintKeypair.publicKey,
+      TOKEN_PROGRAM_ID
+    );
+    
+    // 4. Mint tokens to associated token account
+    const mintToIx = createMintToInstruction(
+      mintKeypair.publicKey,
+      associatedTokenAddress,
+      mintAuthority,
+      initialSupply,
+      [],
+      TOKEN_PROGRAM_ID
+    );
+    
+    // 5. Create metadata account with fallback
+    let createMetadataIx;
+    if (useV3Instruction) {
+      createMetadataIx = this.createModernMetadataInstruction(
+        mintKeypair.publicKey,
+        mintAuthority,
+        payer,
+        name,
+        symbol,
+        uri
+      );
+    } else {
+      createMetadataIx = this.createBasicMetadataInstruction(
+        mintKeypair.publicKey,
+        mintAuthority,
+        payer,
+        name,
+        symbol,
+        uri
+      );
+    }
+    
+    // Add all instructions in the correct order
+    transaction.add(
+      createMintAccountIx,
+      initializeMintIx,
+      createATAIx,
+      mintToIx,
+      createMetadataIx
+    );
+    
+    return transaction;
   }
 }

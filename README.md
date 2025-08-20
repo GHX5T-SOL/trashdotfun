@@ -260,7 +260,6 @@ We welcome contributions! Please feel free to submit issues and pull requests.
 |----------|------|---------|
 | **Telegram** | [@trashdotfun](https://t.me/trashdotfun) | ✅ Active |
 | **X (Twitter)** | [@trashdotfun_](https://x.com/trashdotfun_) | ✅ Active |
-| **Website** | [trashdotfun.com](https://trashdotfun.netlify.app/) | ✅ Live |
 | **Live Demo (Netlify)** | [https://trashdotfun.netlify.app/](https://trashdotfun.netlify.app/) | ✅ Deployed |
 | **Live Demo (Vercel)** | [https://trashdotfun.vercel.app/](https://trashdotfun.vercel.app/) | ✅ Deployed |
 
