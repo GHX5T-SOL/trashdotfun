@@ -368,7 +368,8 @@ export default function CreateToken() {
           decimals,
           Number(initialSupply * Math.pow(10, decimals)),
           associatedTokenAddress,
-          useV3Instruction
+          useV3Instruction,
+          mintRent
         );
         console.log('Token creation transaction created with V3 instruction');
       } catch (error) {
@@ -387,7 +388,8 @@ export default function CreateToken() {
           decimals,
           Number(initialSupply * Math.pow(10, decimals)),
           associatedTokenAddress,
-          useV3Instruction
+          useV3Instruction,
+          mintRent
         );
         console.log('Token creation transaction created with basic instruction');
       }

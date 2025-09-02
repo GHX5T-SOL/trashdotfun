@@ -25,7 +25,8 @@ export class MetaplexService {
     uri: string,
     decimals: number,
     initialSupply: number,
-    associatedTokenAddress: PublicKey
+    associatedTokenAddress: PublicKey,
+    lamports: number
   ): Transaction {
     const transaction = new Transaction();
     
@@ -33,7 +34,8 @@ export class MetaplexService {
     const createMintAccountIx = this.createMintAccountInstruction(
       mintKeypair.publicKey,
       payer,
-      MINT_SIZE
+      MINT_SIZE,
+      lamports
     );
     
     // 2. Initialize mint
@@ -92,7 +94,8 @@ export class MetaplexService {
   private static createMintAccountInstruction(
     mintPublicKey: PublicKey,
     payer: PublicKey,
-    space: number
+    space: number,
+    lamports: number
   ): TransactionInstruction {
     const { SystemProgram } = require('@solana/web3.js');
     
@@ -100,7 +103,7 @@ export class MetaplexService {
       fromPubkey: payer,
       newAccountPubkey: mintPublicKey,
       space: space,
-      lamports: 0, // Will be set by the client
+      lamports: lamports,
       programId: TOKEN_PROGRAM_ID,
     });
   }
@@ -343,7 +346,8 @@ export class MetaplexService {
     decimals: number,
     initialSupply: number,
     associatedTokenAddress: PublicKey,
-    useV3Instruction: boolean = true
+    useV3Instruction: boolean = true,
+    lamports: number
   ): Transaction {
     const transaction = new Transaction();
     
@@ -351,7 +355,8 @@ export class MetaplexService {
     const createMintAccountIx = this.createMintAccountInstruction(
       mintKeypair.publicKey,
       payer,
-      MINT_SIZE
+      MINT_SIZE,
+      lamports
     );
     
     // 2. Initialize mint
