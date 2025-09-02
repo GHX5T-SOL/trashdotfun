@@ -155,16 +155,15 @@ export class IPFSService {
         console.log('IPFS Service: Additional normalization needed, cleaning invalid characters');
         console.log('IPFS Service: Characters before cleaning:', normalizedProof.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
         
-        // More aggressive cleaning: remove ALL non-base64url characters
+        // Aggressive cleaning
         normalizedProof = normalizedProof.replace(/[^A-Za-z0-9_-]/g, '');
         
         console.log('IPFS Service: Characters after cleaning:', normalizedProof.split('').map((c, i) => `${i}:${c}(${c.charCodeAt(0)})`).join(' '));
         console.log('IPFS Service: Final normalized proof length:', normalizedProof.length);
         
-        // Final validation
-        if (!base64urlRegex.test(normalizedProof)) {
-          console.error('IPFS Service: CRITICAL: Still invalid after aggressive cleaning!');
-          console.error('IPFS Service: Final proof:', normalizedProof);
+        // Check if after cleaning it's still valid
+        if (!base64urlRegex.test(normalizedProof) || normalizedProof.length < 100) {
+          console.error('IPFS Service: UCAN proof invalid even after cleaning');
           return false;
         }
       }

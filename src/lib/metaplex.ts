@@ -145,8 +145,10 @@ export class MetaplexService {
         { pubkey: mint, isSigner: false, isWritable: false },
         { pubkey: mintAuthority, isSigner: true, isWritable: false },
         { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: mintAuthority, isSigner: false, isWritable: false }, // updateAuthority
         { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false }, // System Program
         { pubkey: this.RENT_PROGRAM_ID, isSigner: false, isWritable: false }, // Rent Program
+        { pubkey: new PublicKey('Sysvar1nstructions1111111111111111111111111'), isSigner: false, isWritable: false }, // Sysvar Instructions
       ],
       programId: this.METAPLEX_PROGRAM_ID,
       data: instructionData,
@@ -213,6 +215,10 @@ export class MetaplexService {
     // Uses (empty for now)
     data.writeUInt32LE(0, offset);
     offset += 4;
+    
+    // Is mutable (1 = true)
+    data.writeUInt8(1, offset);
+    offset += 1;
     
     return data;
   }
